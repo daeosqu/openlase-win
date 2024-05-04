@@ -230,6 +230,23 @@ start "C:\Program Files\lasershark_hostapp\bin\laserdock_jack.exe"
 . "C:\Program Files\openlase\bin\qplayvid.exe" C:/opt/el/data/bad_apple.mp4
 ```
 
+# Bad Apple color
+
+yt-dlp で Youtube から "MMD Bad Apple!! Now in 3D with more Color~" をダウンロードします。
+
+```
+mkdir c:\opt\el\data
+cd c:\opt\el\data
+C:\opt\python311\Scripts\yt-dlp https://www.youtube.com/watch?v=uOyaCOViAPA
+ren 'MMD Bad Apple!! Now in 3D with more Color~ `[uOyaCOViAPA`].mp4' 'bad_apple_color.mp4'
+```
+
+```
+. "C:\Program Files\openlase\bin\playvid2.exe" C:/opt/el/data/bad_apple_color.mp4
+```
+
+カラーで Bad Apple が再生されることを確認します。
+
 # Pylase
 
 OpenLase の python バインディングを利用するには以下のように PYTHONPATH を設定してください。
@@ -282,6 +299,7 @@ python "C:\Program Files\openlase\bin\simple.py"
 # Development
 
 開発中は以下のように PATH を設定します。
+または env.ps1 を実行してください。
 
 ```
 $env:PATH="C:\opt\el\openlase-win\build\libol;$env:PATH"
@@ -291,7 +309,7 @@ $env:PATH="C:\opt\python311\Scripts;$env:PATH"
 $env:PYTHONPATH="C:\opt\el\openlase-win\build\python"
 ```
 
-また python 3.8 以降は DLL の探索パスが環境変数 PATH に従いません。libjack64.dll と ol.dll を pylase.cp311-win_amd64.pyd と同じ場所にコピーする必要があります。
+libjack64.dll と ol.dll は pylase.cp311-win_amd64.pyd と同じ場所に存在する必要があります。以下のようにしてコピーします。
 
 ```
 cp C:\Windows\libjack64.dll C:\opt\el\openlase-win\build\python

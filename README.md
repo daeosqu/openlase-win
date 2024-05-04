@@ -4,3 +4,4 @@ This was forked from [marcan/openlase](https://github.com/marcan/openlase)
 
 See [README-windows.md](./README-windows.md) for build and installation instructions.
 
+![screenshot](https://github.com/daeosqu/openlase-win/blob/master/screenshot.png)

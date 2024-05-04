@@ -58,15 +58,20 @@ jack_port_t *in_b;
 
 nframes_t rate;
 
-#define HIST_SAMPLES (48 * 50)
-#define BUF_SAMPLES (HIST_SAMPLES+48000)
+#define MIN_HIST_SAMPLES (48 * 10)
+#define DEFAULT_HIST_SAMPLES (48 * 50)
+#define MAX_HIST_SAMPLES (48 * 200)
+
+#define MAX_BUF_SAMPLES (MAX_HIST_SAMPLES+48000)
 
 typedef struct {
 	float x, y, r, g, b;
 } bufsample_t;
 
-bufsample_t buffer[BUF_SAMPLES];
+bufsample_t buffer[MAX_BUF_SAMPLES];
 
+int hist_samples = DEFAULT_HIST_SAMPLES;
+int buf_samples = 0;
 int buf_widx = 0;
 
 float psize = 2;
@@ -88,7 +93,7 @@ static int process (nframes_t nframes, void *arg)
 		buffer[buf_widx].b = *i_b++;
 
 		buf_widx++;
-		if (buf_widx >= BUF_SAMPLES)
+		if (buf_widx >= buf_samples)
 			buf_widx = 0;
 	}
 
@@ -224,7 +229,7 @@ void draw_gl(void)
 	glEnd();
 #endif
 
-	ridx = (buf_widx - HIST_SAMPLES + BUF_SAMPLES) % BUF_SAMPLES;
+	ridx = (buf_widx - hist_samples + buf_samples) % buf_samples;
 
 	float lx, ly, lr, lg, lb;
 	lx = ly = lr = lg = lb = 0;
@@ -233,7 +238,7 @@ void draw_gl(void)
 	float gdelay[2] = {0,0};
 	float bdelay[2] = {0,0};
 
-	for (i = 0; i<HIST_SAMPLES; i++)
+	for (i = 0; i<hist_samples; i++)
 	{
 		float r, g, b;
 
@@ -263,10 +268,10 @@ void draw_gl(void)
             dfactor = 0.9;
 #endif
 
-		int age = HIST_SAMPLES-i;
+		int age = hist_samples-i;
 		float factor;
 
-		factor = (HIST_SAMPLES-age)/(float)HIST_SAMPLES;
+		factor = (hist_samples-age)/(float)hist_samples;
 
 		//factor = factor*factor;
 
@@ -297,7 +302,7 @@ void draw_gl(void)
 		lb = b;
 
 		ridx++;
-		if (ridx >= BUF_SAMPLES)
+		if (ridx >= buf_samples)
 			ridx = 0;
 	}
 	glEnd();
@@ -359,7 +364,7 @@ int main (int argc, char *argv[])
 	setvbuf(stdout, NULL, _IONBF, 0);
 	setvbuf(stderr, NULL, _IONBF, 0);
 
-	while ((optchar = getopt(argc, argv, "h:r:")) != -1) {
+	while ((optchar = getopt(argc, argv, "h:r:s:")) != -1) {
 		switch (optchar) {
 			case 'h':
 			case '?':
@@ -368,8 +373,17 @@ int main (int argc, char *argv[])
 			case 'r':
 				framerate = atof(optarg);
 				break;
+			case 's':
+				hist_samples = atoi(optarg);
+                if (hist_samples < MIN_HIST_SAMPLES)
+                    hist_samples = MIN_HIST_SAMPLES;
+                if (hist_samples > MAX_HIST_SAMPLES)
+                    hist_samples = MAX_HIST_SAMPLES;
+				break;
 		}
 	}
+
+    buf_samples = hist_samples + 48000;
 
 	if (optind != argc) {
 		usage(argv[0]);
