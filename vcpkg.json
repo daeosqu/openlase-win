@@ -1,0 +1,17 @@
+{
+  "builtin-baseline": "c591ac6466a55ef0a05a3d56bb1489ca36e50102",
+  "dependencies": [
+    "ffmpeg",
+    "freeglut",
+    "libmodplug",
+    "pdcurses",
+    "pthreads",
+    "getopt"
+  ],
+  "overrides": [
+    {
+      "name": "ffmpeg",
+      "version": "4.4.3#3"
+    }
+  ]
+}

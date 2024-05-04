@@ -19,9 +19,10 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 
 #define _BSD_SOURCE
 
+#include "ol_compat.h"
+
 #include <stdio.h>
 #include <errno.h>
-#include <unistd.h>
 #include <string.h>
 #include <stdlib.h>
 
@@ -48,9 +49,6 @@ sample_t boost = 8;
 //float w = 110 * (2*M_PI);
 float w = 523.251131f / 4.0f;
 float pos = 0.0f;
-
-#define MAX(a,b) (((a)<(b))?(b):(a))
-#define MIN(a,b) (((a)>(b))?(b):(a))
 
 int process (nframes_t nframes, void *arg)
 {

@@ -43,24 +43,38 @@ currently use the video luma alone and convert it to 1bpp monochrome. It really
 is a hack.
 */
 
+#include "ol_compat.h"
+
 #include "libol.h"
 #include "trace.h"
 
 #include <stdio.h>
 #include <errno.h>
-#include <unistd.h>
 #include <string.h>
 #include <stdlib.h>
 #include <jack/jack.h>
 
 #include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
+#if USE_AVRESAMPLE
 #include <libavresample/avresample.h>
+#else
+#include <libswresample/swresample.h>
+#endif
 #include <libavutil/frame.h>
 #include <libavutil/opt.h>
 
+#ifdef _MSC_VER
+#include <getopt.h>
+#endif
+
 #define FRAMES_BUF 8
 
+#ifndef AVCODEC_MAX_AUDIO_FRAME_SIZE
+#ifndef MAX_AUDIO_FRAME_SIZE
+#define AVCODEC_MAX_AUDIO_FRAME_SIZE 192000 // 1 second of 48khz 32bit audio
+#endif
+#endif
 #define AUDIO_BUF AVCODEC_MAX_AUDIO_FRAME_SIZE
 
 AVFormatContext        *pFormatCtx = NULL;
@@ -71,7 +85,11 @@ AVCodec                *pCodec;
 AVCodec                *pACodec;
 AVFrame         	   *pFrame;
 AVFrame 			   *pAudioFrame;
+#if USE_AVRESAMPLE
 AVAudioResampleContext *resampler;
+#else
+SwrContext *resampler;
+#endif
 
 int buffered_samples;
 float resampleAudioBuffer[AUDIO_BUF];
@@ -130,7 +148,7 @@ void moreaudio(float *lb, float *rb, int samples)
 			} while(packet.stream_index!=audioStream);
 
 			pAudioFrame->nb_samples = AUDIO_BUF;
-			pACodecCtx->get_buffer(pACodecCtx, pAudioFrame);
+			pACodecCtx->get_buffer2(pACodecCtx, pAudioFrame, 0);
 			avcodec_decode_audio4(pACodecCtx, pAudioFrame, &decoded_frame, &packet);
 			if(!decoded_frame)
 			{
@@ -138,9 +156,15 @@ void moreaudio(float *lb, float *rb, int samples)
 				return;
 			}
 
+#if USE_AVRESAMPLE
 			buffered_samples = avresample_convert(resampler,
 				(uint8_t **)resampleOutput, 0, AUDIO_BUF,
 				pAudioFrame->data, pAudioFrame->linesize[0], pAudioFrame->nb_samples);
+#else
+			buffered_samples = swr_convert(resampler,
+				(uint8_t **)resampleOutput, AUDIO_BUF,
+				(uint8_t **)pAudioFrame->data, pAudioFrame->nb_samples);
+#endif
 			pAudioBuffer = resampleOutput[0];
 		}
 
@@ -221,7 +245,11 @@ int av_aud_init(char *file)
 	if (avcodec_open2(pACodecCtx, pACodec, NULL)<0)
 		return -1;
 
+#if USE_AVRESAMPLE
 	resampler = avresample_alloc_context();
+#else
+	resampler = swr_alloc();
+#endif
 	av_opt_set_int(resampler, "in_channel_layout", pACodecCtx->channel_layout, 0);
 	av_opt_set_int(resampler, "out_channel_layout", AV_CH_LAYOUT_STEREO, 0);
 	av_opt_set_int(resampler, "in_sample_rate", pACodecCtx->sample_rate, 0);
@@ -229,7 +257,11 @@ int av_aud_init(char *file)
 	av_opt_set_int(resampler, "in_sample_fmt", pACodecCtx->sample_fmt, 0);
 	av_opt_set_int(resampler, "out_sample_fmt", AV_SAMPLE_FMT_FLT, 0);
 
+#if USE_AVRESAMPLE
 	if (avresample_open(resampler))
+#else
+	if (swr_init(resampler))
+#endif
 		return -1;
 
 	buffered_samples = 0;
@@ -247,7 +279,11 @@ int av_deinit(void)
 	avcodec_close(pACodecCtx);
 
 	// Close the resamplers
+#if USE_AVRESAMPLE
 	avresample_close(resampler);
+#else
+	swr_close(resampler);
+#endif
 
 	// Close the video file
 	avformat_close_input(&pFormatCtx);

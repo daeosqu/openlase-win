@@ -1,6 +1,8 @@
-include_directories (${CMAKE_SOURCE_DIR}/include)
-link_directories (${CMAKE_BINARY_DIR}/libol)
-
 add_executable(demo demo.c trace.c)
-target_link_libraries(demo ol modplug)
+target_include_directories(demo PRIVATE ${JACK_INCLUDE_DIR} ${MODPLUG_INCLUDE_DIRS})
+target_link_libraries(demo ol ${MODPLUG_LIBRARIES} ${JACK_LIBRARY} ${COMMON_LIBRARIES})
 
+install(TARGETS demo RUNTIME DESTINATION bin)
+foreach(name GLOS-pope.xm euskal18.ild lase_title.ild)
+    install(FILES ${CMAKE_CURRENT_LIST_DIR}/${name} DESTINATION bin)
+endforeach()

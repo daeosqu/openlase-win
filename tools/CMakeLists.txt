@@ -21,27 +21,44 @@ link_directories (${CMAKE_BINARY_DIR}/libol)
 
 add_executable(playilda playilda.c)
 target_link_libraries(playilda ${JACK_LIBRARIES})
+install(TARGETS playilda RUNTIME DESTINATION bin)
 
 add_executable(invert invert.c)
 target_link_libraries(invert ${JACK_LIBRARIES})
+install(TARGETS invert RUNTIME DESTINATION bin)
 
 add_executable(cal cal.c)
-target_link_libraries(cal ${JACK_LIBRARIES} m)
+target_link_libraries(cal ${JACK_LIBRARIES} ${MATH_LIBRARY})
+install(TARGETS cal RUNTIME DESTINATION bin)
 
-#if(FFMPEG_FOUND AND BUILD_TRACER)
-# include_directories(${FFMPEG_INCLUDE_DIR})
-# add_executable(playvid playvid.c)
-# target_link_libraries(playvid openlase ${FFMPEG_LIBRARIES} swresample)
-#else()
-#  message(STATUS "Will NOT build playvid (FFmpeg or tracer missing)")
-#endif()
+if(FFMPEG_FOUND AND BUILD_TRACER)
+ #include_directories(${FFMPEG_INCLUDE_DIR})
+ add_executable(playvid playvid.c)
+ target_include_directories(playvid PRIVATE ${FFMPEG_INCLUDE_DIRS})
+ target_compile_options(playvid PRIVATE ${FFMPEG_CFLAGS_OTHER})
+ target_link_directories(playvid PRIVATE ${FFMPEG_LIBRARY_DIRS})
+ target_link_options(playvid PRIVATE ${FFMPEG_LDFLAGS_OTHER})
+ target_link_libraries(playvid ol ${FFMPEG_LIBRARIES} ${GETOPT_LIBRARY})
+ install(TARGETS playvid RUNTIME DESTINATION bin)
+else()
+  message(STATUS "Will NOT build playvid (FFmpeg or tracer missing)")
+endif()
 
 if(OPENGL_FOUND AND GLUT_FOUND)
   add_executable(simulator simulator.c)
-  include_directories(${OPENGL_INCLUDE_DIRS} ${GLUT_INCLUDE_DIRS})
-  target_link_libraries(simulator m ${OPENGL_LIBRARIES} ${GLUT_LIBRARY} ${JACK_LIBRARIES})
+  include_directories(${OPENGL_INCLUDE_DIRS} ${GLUT_INCLUDE_DIR})
+  target_link_libraries(simulator ${MATH_LIBRARY} ${OPENGL_LIBRARIES} ${GLUT_LIBRARY} ${JACK_LIBRARIES} ${GETOPT_LIBRARY} ${COMMON_LIBRARY})
+  #install(TARGETS simulator RUNTIME DESTINATION bin)
+  install(TARGETS simulator
+      RUNTIME DESTINATION bin
+      LIBRARY DESTINATION bin)
 else()
   message(STATUS "Will NOT build simulator (OpenGL or GLUT missing)")
 endif()
 
 add_subdirectory(qplayvid)
+
+# Python scripts
+
+file(GLOB PYTHON_SCRIPTS "*.py")
+install(FILES ${PYTHON_SCRIPTS} DESTINATION ${CMAKE_INSTALL_PREFIX}/bin)

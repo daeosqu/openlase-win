@@ -17,33 +17,37 @@
 #
 
 if(CURSES_FOUND AND FFMPEG_FOUND AND BUILD_TRACER)
-  include_directories(${CMAKE_SOURCE_DIR}/tools ${CURSES_INCLUDE_DIR} ${FFMPEG_INCLUDE_DIR})
 
   add_executable(slides
     main.c 3ddemos.c static.c metaballs.c circlescope.c avstream.c video.c pong.c
-
     ${CMAKE_CURRENT_BINARY_DIR}/openlase-logo.ild
     ${CMAKE_CURRENT_BINARY_DIR}/27c3-logo.ild
     ${CMAKE_CURRENT_BINARY_DIR}/jack-logo.ild
     ${CMAKE_CURRENT_BINARY_DIR}/output.ild
   )
 
-
-  target_link_libraries(slides ol ${FFMPEG_LIBRARIES} avresample
-	  ${CURSES_LIBRARIES})
+  target_compile_definitions(slides PRIVATE -DPDC_DLL_BUILD)
+  target_include_directories(slides PRIVATE ${CMAKE_SOURCE_DIR}/tools ${FFMPEG_INCLUDE_DIR} ${CURSES_INCLUDE_DIR})
+  target_link_libraries(slides ol ${FFMPEG_LIBRARIES} ${CURSES_LIBRARY})
 
   function(svg2ild NAME)
     add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${NAME}.ild
       DEPENDS ${CMAKE_SOURCE_DIR}/tools/svg2ild.py
       MAIN_DEPENDENCY ${NAME}.svg
       DEPENDS ${NAME}.svg ${NAME}.cfg
-      COMMAND ${PYTHON_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/svg2ild.py -q ${ARGN} -cfg ${CMAKE_CURRENT_SOURCE_DIR}/${NAME}.cfg ${CMAKE_CURRENT_SOURCE_DIR}/${NAME}.svg ${CMAKE_CURRENT_BINARY_DIR}/${NAME}.ild)
+      COMMAND ${Python_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/svg2ild.py -q ${ARGN} -cfg ${CMAKE_CURRENT_SOURCE_DIR}/${NAME}.cfg ${CMAKE_CURRENT_SOURCE_DIR}/${NAME}.svg ${CMAKE_CURRENT_BINARY_DIR}/${NAME}.ild)
   endfunction()
 
   svg2ild(openlase-logo -noopt)
   svg2ild(27c3-logo)
   svg2ild(jack-logo)
   svg2ild(output)
+
+  install(TARGETS harp RUNTIME DESTINATION bin)
+  foreach(name openlase-logo 27c3-logo jack-logo output)
+     install(FILES ${CMAKE_CURRENT_BINARY_DIR}/${name}.ild DESTINATION bin)
+  endforeach()
+
 else()
   message(STATUS "Will NOT build 27c3_slides (curses or FFmpeg or tracer missing)")
 endif()

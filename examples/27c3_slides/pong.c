@@ -17,12 +17,18 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
+#include "ol_compat.h"
+
 #include "libol.h"
 #include "ilda.h"
 #include "text.h"
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
+
+#if defined(__MINGW32__) || defined(__MINGW64__) || defined(_MSC_VER)
+#define random rand
+#endif
 
 /* pong demo */
 

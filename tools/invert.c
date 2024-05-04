@@ -19,9 +19,10 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 
 #define _BSD_SOURCE
 
+#include "ol_compat.h"
+
 #include <stdio.h>
 #include <errno.h>
-#include <unistd.h>
 #include <string.h>
 #include <stdlib.h>
 
@@ -164,7 +165,12 @@ int main (int argc, char *argv[])
 	}
 
 	while (1)
+#if _WIN32
+		Sleep(1);
+#else
 		sleep(1);
+#endif
+
 	jack_client_close (client);
 	exit (0);
 }

@@ -17,6 +17,7 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
+#include "ol_compat.h"
 #include "libol.h"
 #include "ilda.h"
 
@@ -25,7 +26,6 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include <string.h>
 
 #include <sys/types.h>
-#include <sys/param.h>
 #include <sys/stat.h>
 
 #if BYTE_ORDER == LITTLE_ENDIAN
@@ -41,35 +41,8 @@ static inline uint16_t swapshort(uint16_t v) {
 #endif
 
 #include <stdint.h>
+#include "ilda.h"
 
-struct ilda_hdr {
-	uint32_t magic;
-	uint8_t pad1[3];
-	uint8_t format;
-	char name[8];
-	char company[8];
-	uint16_t count;
-	uint16_t frameno;
-	uint16_t framecount;
-	uint8_t scanner;
-	uint8_t pad2;
-} __attribute__((packed));
-
-
-struct icoord3d {
-	int16_t x;
-	int16_t y;
-	int16_t z;
-	uint8_t state;
-	uint8_t color;
-} __attribute__((packed));
-
-struct icoord2d {
-	int16_t x;
-	int16_t y;
-	uint8_t state;
-	uint8_t color;
-} __attribute__((packed));
 
 IldaFile *olLoadIlda(const char *filename)
 {

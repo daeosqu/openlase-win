@@ -1,0 +1,148 @@
+<!DOCTYPE patchbay>
+
+<patchbay version="0.3.13.10" name="openlase-el">
+
+  <output-sockets>
+
+    <socket exclusive="off" client="system" type="jack-audio" name="system">
+      <plug>capture_1</plug>
+      <plug>capture_2</plug>
+    </socket>
+
+    <socket exclusive="on" client="output" type="jack-audio" name="output">
+      <plug>out_x</plug>
+      <plug>out_y</plug>
+      <plug>out_r</plug>
+      <plug>out_g</plug>
+      <plug>out_b</plug>
+      <plug>out_e</plug>
+    </socket>
+
+    <socket exclusive="on" client="lasershark" type="jack-audio" name="lasershark">
+      <plug>out_x</plug>
+      <plug>out_y</plug>
+      <plug>out_r</plug>
+      <plug>out_g</plug>
+      <plug>out_b</plug>
+    </socket>
+
+    <socket exclusive="off" client="libol" type="jack-audio" name="libol-laser">
+      <plug>out_x</plug>
+      <plug>out_y</plug>
+      <plug>out_r</plug>
+      <plug>out_g</plug>
+      <plug>out_b</plug>
+    </socket>
+
+    <socket exclusive="off" client="cal" type="jack-audio" name="cal">
+      <plug>out_x</plug>
+      <plug>out_y</plug>
+      <plug>out_r</plug>
+      <plug>out_g</plug>
+      <plug>out_b</plug>
+    </socket>
+
+    <socket exclusive="off" client="libol" type="jack-audio" name="libol-audio">
+      <plug>out_al</plug>
+      <plug>out_ar</plug>
+    </socket>
+
+    <socket exclusive="on" client="playilda" type="jack-audio" name="playilda">
+      <plug>out_x</plug>
+      <plug>out_y</plug>
+      <plug>out_z</plug>
+      <plug>out_r</plug>
+      <plug>out_g</plug>
+      <plug>out_b</plug>
+      <plug>out_w</plug>
+    </socket>
+
+    <socket exclusive="off" client="circlescope" type="jack-audio" name="circlescope">
+      <plug>out_x</plug>
+      <plug>out_y</plug>
+      <plug>out_w</plug>
+    </socket>
+
+    <socket exclusive="off" client="scope" type="jack-audio" name="scope">
+      <plug>out_x</plug>
+      <plug>out_y</plug>
+      <plug>out_w</plug>
+    </socket>
+
+  </output-sockets>
+
+  <input-sockets>
+
+    <socket exclusive="off" client="system" type="jack-audio" name="system">
+      <plug>playback_1</plug>
+      <plug>playback_2</plug>
+    </socket>
+
+    <socket exclusive="on" client="simulator" type="jack-audio" name="simulator">
+      <plug>in_x</plug>
+      <plug>in_y</plug>
+      <plug>in_r</plug>
+      <plug>in_g</plug>
+      <plug>in_b</plug>
+    </socket>
+
+    <socket exclusive="on" client="simulator-01" type="jack-audio" name="simulator-01">
+      <plug>in_x</plug>
+      <plug>in_y</plug>
+      <plug>in_r</plug>
+      <plug>in_g</plug>
+      <plug>in_b</plug>
+    </socket>
+
+    <socket exclusive="on" client="output" type="jack-audio" name="output">
+      <plug>in_x</plug>
+      <plug>in_y</plug>
+      <plug>in_r</plug>
+      <plug>in_g</plug>
+      <plug>in_b</plug>
+    </socket>
+
+    <socket exclusive="on" client="lasershark" type="jack-audio" name="lasershark">
+      <plug>in_x</plug>
+      <plug>in_y</plug>
+      <plug>in_r</plug>
+      <plug>in_g</plug>
+      <plug>in_b</plug>
+    </socket>
+
+    <socket exclusive="on" client="circlescope" type="jack-audio" name="circlescope">
+      <plug>in_l</plug>
+      <plug>in_r</plug>
+    </socket>
+
+    <socket exclusive="on" client="scope" type="jack-audio" name="scope">
+      <plug>in_l</plug>
+      <plug>in_r</plug>
+    </socket>
+
+  </input-sockets>
+
+  <slots/>
+
+  <cables>
+    <cable output="cal" input="simulator" type="jack-audio" />
+    <cable output="circlescope" input="simulator" type="jack-audio" />
+    <cable output="libol-laser" input="simulator" type="jack-audio" />
+    <cable output="playilda" input="simulator" type="jack-audio" />
+    <cable output="scope" input="simulator" type="jack-audio" />
+
+    <cable output="cal" input="simulator" type="jack-audio" />
+    <cable output="circlescope" input="output" type="jack-audio" />
+    <cable output="libol-laser" input="output" type="jack-audio" />
+    <cable output="playilda" input="output" type="jack-audio" />
+    <cable output="scope" input="output" type="jack-audio" />
+
+    <cable output="libol-audio" input="system" type="jack-audio" />
+    <cable output="system" input="circlescope" type="jack-audio" />
+    <cable output="system" input="scope" type="jack-audio" />
+
+    <cable output="output" input="simulator-01" type="jack-audio" />
+    <cable output="output" input="lasershark" type="jack-audio" />
+  </cables>
+
+</patchbay>

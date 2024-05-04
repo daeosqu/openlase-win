@@ -1,4 +1,4 @@
-#!/usr/bin/python2
+#!python3
 import sys
 from math import pi, cos
 

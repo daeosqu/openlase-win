@@ -20,6 +20,8 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #ifndef TRACE_H
 #define TRACE_H
 
+#include "libol_common.h"
+
 typedef struct OLTraceCtx OLTraceCtx;
 
 typedef uint32_t icoord;
@@ -51,12 +53,12 @@ typedef struct {
 	OLTraceObject *objects;
 } OLTraceResult;
 
-int olTraceInit(OLTraceCtx **ctx, OLTraceParams *params);
-int olTraceReInit(OLTraceCtx *ctx, OLTraceParams *params);
+OL_EXPORT int olTraceInit(OLTraceCtx **ctx, OLTraceParams *params);
+OL_EXPORT int olTraceReInit(OLTraceCtx *ctx, OLTraceParams *params);
 
-int olTrace(OLTraceCtx *ctx, uint8_t *src, icoord stride, OLTraceResult *result);
-void olTraceFree(OLTraceResult *result);
+OL_EXPORT int olTrace(OLTraceCtx *ctx, uint8_t *src, icoord stride, OLTraceResult *result);
+OL_EXPORT void olTraceFree(OLTraceResult *result);
 
-void olTraceDeinit(OLTraceCtx *ctx);
+OL_EXPORT void olTraceDeinit(OLTraceCtx *ctx);
 
 #endif

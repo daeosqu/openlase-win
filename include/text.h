@@ -23,6 +23,8 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include <stdint.h>
 #include <stddef.h>
 
+#include "libol_common.h"
+
 typedef struct {
 	int flag;
 	float x;
@@ -40,11 +42,11 @@ typedef struct {
 	const FontChar *chars;
 } Font;
 
-Font *olGetDefaultFont(void);
-float olGetCharWidth(Font *fnt, int c);
-float olGetStringWidth(Font *fnt, float height, const char *s);
-float olGetCharOverlap(Font *font, float height);
-float olDrawChar(Font *fnt, float x, float y, float height, uint32_t color, int c);
-float olDrawString(Font *fnt, float x, float y, float height, uint32_t color, const char *s);
+OL_EXPORT Font *olGetDefaultFont(void);
+OL_EXPORT float olGetCharWidth(Font *fnt, int c);
+OL_EXPORT float olGetStringWidth(Font *fnt, float height, const char *s);
+OL_EXPORT float olGetCharOverlap(Font *font, float height);
+OL_EXPORT float olDrawChar(Font *fnt, float x, float y, float height, uint32_t color, int c);
+OL_EXPORT float olDrawString(Font *fnt, float x, float y, float height, uint32_t color, const char *s);
 
 #endif

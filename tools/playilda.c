@@ -33,15 +33,15 @@ the laser image updates.
 
 #define _BSD_SOURCE
 
+#include "ol_compat.h"
+
 #include <stdio.h>
 #include <errno.h>
-#include <unistd.h>
 #include <string.h>
 #include <stdlib.h>
 #include <jack/jack.h>
 
 #include <sys/types.h>
-#include <sys/param.h>
 #include <sys/stat.h>
 
 #if BYTE_ORDER == LITTLE_ENDIAN
@@ -57,6 +57,7 @@ static inline uint16_t swapshort(uint16_t v) {
 #endif
 
 #include <stdint.h>
+#include "ilda.h"
 
 typedef jack_default_audio_sample_t sample_t;
 typedef jack_nframes_t nframes_t;
@@ -77,55 +78,6 @@ nframes_t pointrate = 30000;
 int scale = 0;
 
 sample_t size = 1.0;
-
-struct ilda_hdr {
-	uint32_t magic;
-	uint8_t pad1[3];
-	uint8_t format;
-	char name[8];
-	char company[8];
-	uint16_t count;
-	uint16_t frameno;
-	uint16_t framecount;
-	uint8_t scanner;
-	uint8_t pad2;
-} __attribute__((packed));
-
-struct color {
-	uint8_t r, g, b;
-};
-
-#define BLANK 0x40
-#define LAST 0x80
-
-struct icoord3d {
-	int16_t x;
-	int16_t y;
-	int16_t z;
-	uint8_t state;
-	uint8_t color;
-} __attribute__((packed));
-
-struct icoord2d {
-	int16_t x;
-	int16_t y;
-	uint8_t state;
-	uint8_t color;
-} __attribute__((packed));
-
-struct coord3d {
-	int16_t x;
-	int16_t y;
-	int16_t z;
-	uint8_t state;
-	struct color color;
-};
-
-struct frame {
-	struct coord3d *points;
-	int position;
-	int count;
-};
 
 #define FRAMEBUFS 10
 struct frame frames[FRAMEBUFS];
@@ -522,7 +474,12 @@ int main (int argc, char *argv[])
 
 	while (1) {
 		stat(fname, &st2);
-		if(st1.st_mtime != st2.st_mtime || st1.st_mtime != st2.st_mtime) {
+#if !defined(WIN32)
+		if(st1.st_mtim.tv_sec != st2.st_mtim.tv_sec || st1.st_mtim.tv_nsec != st2.st_mtim.tv_nsec) {
+#else
+		/* FIXME */
+		if(st1.st_mtime != st2.st_mtime) {
+#endif
 			frameno = (frameno+1)%FRAMEBUFS;
 			printf("Loading new frame to slot %d\n", frameno);
 			if(frames[frameno].points)
@@ -532,7 +489,7 @@ int main (int argc, char *argv[])
 			curframe = &frames[frameno];
 			memcpy(&st1, &st2, sizeof(st1));
 		}
-		usleep(50000);
+		sleep_millis(50);
 	}
 	jack_client_close (client);
 	exit (0);

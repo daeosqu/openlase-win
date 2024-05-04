@@ -16,5 +16,5 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #
 
-install(FILES ilda.h libol.h text.h trace.h
+install(FILES ilda.h libol.h text.h trace.h libol_common.h
         DESTINATION ${CMAKE_INSTALL_PREFIX}/include/ol)

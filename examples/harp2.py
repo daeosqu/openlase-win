@@ -1,4 +1,4 @@
-#!/usr/bin/python3
+#!python3
 #         OpenLase - a realtime laser graphics toolkit
 #
 # Copyright (C) 2009-2011 Hector Martin "marcan" <hector@marcansoft.com>
@@ -29,7 +29,7 @@ HEIGHT=240
 VELOCITY=90
 
 import sys, math
-import cv
+import cv2 as cv
 
 from pyalsa import alsaseq
 import pylase as ol

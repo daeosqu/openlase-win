@@ -17,9 +17,10 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
+#include "ol_compat.h"
+
 #include <stdio.h>
 #include <errno.h>
-#include <unistd.h>
 #include <string.h>
 #include <stdlib.h>
 #include <math.h>
@@ -31,6 +32,8 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include <QApplication>
 #include <QString>
 #include "output_settings.h"
+
+#undef max
 
 typedef jack_default_audio_sample_t sample_t;
 typedef jack_nframes_t nframes_t;
@@ -198,7 +201,7 @@ static int process (nframes_t nframes, void *arg)
 			b = 1.0f - b;
 		}
 		if (cfg->color_flags & COLOR_MONOCHROME) {
-			float v = max(r,max(g,b));
+			float v = MAX(r,MAX(g,b));
 			r = g = b = v;
 		}
 

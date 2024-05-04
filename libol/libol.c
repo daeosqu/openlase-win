@@ -17,6 +17,8 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
+#include "ol_compat.h"
+
 #include "libol.h"
 #include <jack/jack.h>
 #include <stdio.h>
@@ -24,7 +26,6 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include <stdarg.h>
 #include <string.h>
 #include <math.h>
-#include <unistd.h>
 
 typedef jack_default_audio_sample_t sample_t;
 typedef jack_nframes_t nframes_t;
@@ -78,6 +79,15 @@ static OLFrameInfo last_info;
 
 static Frame wframes[OL_MAX_OUTPUTS];
 static Frame *wframe;
+
+#ifdef _WIN32
+#undef DrawState
+#define DrawState OL_DrawState
+#undef near
+#define near OL_near
+#undef far
+#define far OL_far
+#endif
 
 typedef struct {
 	Object *curobj;
@@ -888,7 +898,7 @@ float olRenderFrame(int max_fps)
 
 	while (((cwbuf+1)%fbufs) == crbuf) {
 		//olLog("Waiting %d %d\n", cwbuf, crbuf);
-		usleep(1000);
+		sleep_millis(1);
 		first_time_full = 1;
 	}
 

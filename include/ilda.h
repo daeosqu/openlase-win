@@ -20,7 +20,68 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #ifndef ILD_H
 #define ILD_H
 
-#include <stdint.h>
+#include "libol_common.h"
+
+#if __GNUC__
+#define _ATTRIBUTE_PACKED __attribute__((packed))
+#else
+#define _ATTRIBUTE_PACKED
+#endif
+
+#pragma pack(push,1)
+struct ilda_hdr {
+	uint32_t magic;
+	uint8_t pad1[3];
+	uint8_t format;
+	char name[8];
+	char company[8];
+	uint16_t count;
+	uint16_t frameno;
+	uint16_t framecount;
+	uint8_t scanner;
+	uint8_t pad2;
+} _ATTRIBUTE_PACKED;
+#pragma pack(pop)
+
+struct color {
+	uint8_t r, g, b;
+};
+
+#define BLANK 0x40
+#define LAST 0x80
+
+#pragma pack(push,1)
+struct icoord3d {
+	int16_t x;
+	int16_t y;
+	int16_t z;
+	uint8_t state;
+	uint8_t color;
+} _ATTRIBUTE_PACKED;
+#pragma pack(pop)
+
+#pragma pack(push,1)
+struct icoord2d {
+	int16_t x;
+	int16_t y;
+	uint8_t state;
+	uint8_t color;
+} _ATTRIBUTE_PACKED;
+#pragma pack(pop)
+
+struct coord3d {
+	int16_t x;
+	int16_t y;
+	int16_t z;
+	uint8_t state;
+	struct color color;
+};
+
+struct frame {
+	struct coord3d *points;
+	int position;
+	int count;
+};
 
 typedef struct {
 	float x;
@@ -41,9 +102,9 @@ typedef struct {
 	IldaPoint *points;
 } IldaFile;
 
-IldaFile *olLoadIlda(const char *filename);
-void olDrawIlda(IldaFile *ild);
-void olDrawIlda3D(IldaFile *ild);
-void olFreeIlda(IldaFile *ild);
+OL_EXPORT IldaFile *olLoadIlda(const char *filename);
+OL_EXPORT void olDrawIlda(IldaFile *ild);
+OL_EXPORT void olDrawIlda3D(IldaFile *ild);
+OL_EXPORT void olFreeIlda(IldaFile *ild);
 
 #endif

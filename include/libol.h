@@ -20,7 +20,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #ifndef LIBOL_H
 #define LIBOL_H
 
-#include <stdint.h>
+#include "libol_common.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -87,83 +87,83 @@ typedef struct {
 	int padding_points;
 } OLFrameInfo;
 
-int olInit(int buffer_count, int max_points);
-int olInit2(const OLConfig *config);
+OL_EXPORT int olInit(int buffer_count, int max_points);
+OL_EXPORT int olInit2(const OLConfig *config);
 
-void olSetRenderParams(OLRenderParams *params);
-void olGetRenderParams(OLRenderParams *params);
+OL_EXPORT void olSetRenderParams(OLRenderParams *params);
+OL_EXPORT void olGetRenderParams(OLRenderParams *params);
 
-void olSetOutput(int output);
+OL_EXPORT void olSetOutput(int output);
 
 typedef void (*AudioCallbackFunc)(float *leftbuf, float *rightbuf, int samples);
 
-void olSetAudioCallback(AudioCallbackFunc f);
+OL_EXPORT void olSetAudioCallback(AudioCallbackFunc f);
 
-void olLoadIdentity(void);
-void olPushMatrix(void);
-void olPopMatrix(void);
+OL_EXPORT void olLoadIdentity(void);
+OL_EXPORT void olPushMatrix(void);
+OL_EXPORT void olPopMatrix(void);
 
-void olMultMatrix(float m[9]);
-void olRotate(float theta);
-void olTranslate(float x, float y);
-void olScale(float sx, float sy);
+OL_EXPORT void olMultMatrix(float m[9]);
+OL_EXPORT void olRotate(float theta);
+OL_EXPORT void olTranslate(float x, float y);
+OL_EXPORT void olScale(float sx, float sy);
 
-void olLoadIdentity3(void);
-void olPushMatrix3(void);
-void olPopMatrix3(void);
+OL_EXPORT void olLoadIdentity3(void);
+OL_EXPORT void olPushMatrix3(void);
+OL_EXPORT void olPopMatrix3(void);
 
-void olMultMatrix3(float m[16]);
-void olRotate3X(float theta);
-void olRotate3Y(float theta);
-void olRotate3Z(float theta);
-void olTranslate3(float x, float y, float z);
-void olScale3(float sx, float sy, float sz);
+OL_EXPORT void olMultMatrix3(float m[16]);
+OL_EXPORT void olRotate3X(float theta);
+OL_EXPORT void olRotate3Y(float theta);
+OL_EXPORT void olRotate3Z(float theta);
+OL_EXPORT void olTranslate3(float x, float y, float z);
+OL_EXPORT void olScale3(float sx, float sy, float sz);
 
-void olFrustum (float left, float right, float bot, float ttop, float near, float far);
-void olPerspective(float fovy, float aspect, float zNear, float zFar);
+OL_EXPORT void olFrustum (float left, float right, float bot, float ttop, float near, float far);
+OL_EXPORT void olPerspective(float fovy, float aspect, float zNear, float zFar);
 
-void olResetColor(void);
-void olMultColor(uint32_t color);
-void olPushColor(void);
-void olPopColor(void);
+OL_EXPORT void olResetColor(void);
+OL_EXPORT void olMultColor(uint32_t color);
+OL_EXPORT void olPushColor(void);
+OL_EXPORT void olPopColor(void);
 
-void olBegin(int prim);
-void olVertex(float x, float y, uint32_t color);
-void olVertex3(float x, float y, float z, uint32_t color);
-void olVertex2Z(float x, float y, float z, uint32_t color);
-void olEnd(void);
+OL_EXPORT void olBegin(int prim);
+OL_EXPORT void olVertex(float x, float y, uint32_t color);
+OL_EXPORT void olVertex3(float x, float y, float z, uint32_t color);
+OL_EXPORT void olVertex2Z(float x, float y, float z, uint32_t color);
+OL_EXPORT void olEnd(void);
 
-void olTransformVertex(float *x, float *y);
-void olTransformVertex3(float *x, float *y, float *z);
-void olTransformVertex4(float *x, float *y, float *z, float *w);
+OL_EXPORT void olTransformVertex(float *x, float *y);
+OL_EXPORT void olTransformVertex3(float *x, float *y, float *z);
+OL_EXPORT void olTransformVertex4(float *x, float *y, float *z, float *w);
 
 typedef void (*ShaderFunc)(float *x, float *y, uint32_t *color);
 typedef void (*Shader3Func)(float *x, float *y, float *z, uint32_t *color);
 
-void olSetVertexPreShader(ShaderFunc f);
-void olSetVertexShader(ShaderFunc f);
-void olSetVertex3Shader(Shader3Func f);
+OL_EXPORT void olSetVertexPreShader(ShaderFunc f);
+OL_EXPORT void olSetVertexShader(ShaderFunc f);
+OL_EXPORT void olSetVertex3Shader(Shader3Func f);
 
-void olSetPixelShader(ShaderFunc f);
-void olSetPixel3Shader(Shader3Func f);
+OL_EXPORT void olSetPixelShader(ShaderFunc f);
+OL_EXPORT void olSetPixel3Shader(Shader3Func f);
 
-void olRect(float x1, float y1, float x2, float y2, uint32_t color);
-void olLine(float x1, float y1, float x2, float y2, uint32_t color);
-void olDot(float x, float y, int points, uint32_t color);
+OL_EXPORT void olRect(float x1, float y1, float x2, float y2, uint32_t color);
+OL_EXPORT void olLine(float x1, float y1, float x2, float y2, uint32_t color);
+OL_EXPORT void olDot(float x, float y, int points, uint32_t color);
 
-float olRenderFrame(int max_fps);
+OL_EXPORT float olRenderFrame(int max_fps);
 
-void olGetFrameInfo(OLFrameInfo *info);
+OL_EXPORT void olGetFrameInfo(OLFrameInfo *info);
 
-void olShutdown(void);
+OL_EXPORT void olShutdown(void);
 
-void olSetScissor (float x0, float y0, float x1, float y1);
+OL_EXPORT void olSetScissor (float x0, float y0, float x1, float y1);
 
-void olLog(const char *fmt, ...);
+OL_EXPORT void olLog(const char *fmt, ...);
 
 typedef void (*LogCallbackFunc)(const char *msg);
 
-void olSetLogCallback(LogCallbackFunc f);
+OL_EXPORT void olSetLogCallback(LogCallbackFunc f);
 
 #ifdef __cplusplus
 }  // extern "C"

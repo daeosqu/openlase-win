@@ -107,9 +107,15 @@ int audio_readsamples(AContext *ctx, float *lb, float *rb, int samples)
 
 			input_samples = a_frame->nb_samples;
 
+#if USE_AVRESAMPLE
 			ctx->buffered_samples = avresample_convert(ctx->resampler,
 				(uint8_t **)&ctx->oabuf, 0, AVCODEC_MAX_AUDIO_FRAME_SIZE,
 				a_frame->data, a_frame->linesize[0], input_samples);
+#else
+			ctx->buffered_samples = swr_convert(ctx->resampler,
+				(uint8_t **)&ctx->oabuf, AVCODEC_MAX_AUDIO_FRAME_SIZE,
+				(uint8_t **)a_frame->data, input_samples);
+#endif
 
 			ctx->poabuf = ctx->oabuf;
 		}
@@ -225,14 +231,22 @@ int audio_open(AContext **octx, char *file, float start_pos)
 	if (avcodec_open2(ctx->av.codecctx, ctx->av.codec, NULL) < 0)
 		goto error;
 
+#if USE_AVRESAMPLE
 	ctx->resampler = avresample_alloc_context();
+#else
+	ctx->resampler = swr_alloc();
+#endif
 	av_opt_set_int(ctx->resampler, "in_channel_layout", ctx->av.codecctx->channel_layout, 0);
 	av_opt_set_int(ctx->resampler, "out_channel_layout", AV_CH_LAYOUT_STEREO, 0);
 	av_opt_set_int(ctx->resampler, "in_sample_rate", ctx->av.codecctx->sample_rate, 0);
 	av_opt_set_int(ctx->resampler, "out_sample_rate", 48000, 0);
 	av_opt_set_int(ctx->resampler, "in_sample_fmt", ctx->av.codecctx->sample_fmt, 0);
 	av_opt_set_int(ctx->resampler, "out_sample_fmt", AV_SAMPLE_FMT_FLT, 0);
+#if USE_AVRESAMPLE
 	if (avresample_open(ctx->resampler))
+#else
+	if (swr_init(ctx->resampler))
+#endif
 		return -1;
 
 	if (!ctx->resampler)
@@ -259,7 +273,11 @@ error:
 int audio_close(AContext *ctx)
 {
 	avcodec_close(ctx->av.codecctx);
+#if USE_AVRESAMPLE
 	avresample_close(ctx->resampler);
+#else
+	swr_close(ctx->resampler);
+#endif
 //	av_close_input_file(ctx->av.formatctx);
 	free(ctx->oabuf);
 	free(ctx);

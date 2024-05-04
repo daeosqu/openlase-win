@@ -33,7 +33,7 @@ cdef extern from "libol.h":
 		_RENDER_NOREORDER "RENDER_NOREORDER"
 		_RENDER_NOREVERSE "RENDER_NOREVERSE"
 
-	ctypedef struct OLConfig:
+	ctypedef struct OLConfig "OLConfig":
 		int buffer_count
 		int max_points
 		int num_outputs
@@ -148,6 +148,8 @@ POINTS = OL_POINTS
 RENDER_GRAYSCALE = _RENDER_GRAYSCALE
 RENDER_NOREORDER = _RENDER_NOREORDER
 RENDER_NOREVERSE = _RENDER_NOREVERSE
+
+OL_MAX_OUTPUTS = 16
 
 C_RED	= 0xff0000
 C_GREEN = 0x00ff00
@@ -475,7 +477,7 @@ cpdef setScissor(tuple start, tuple end):
 	olSetScissor(x1, y1, x2, y2)
 
 _py_logcb = None
-cdef void _logcb(const_char_ptr msg):
+cdef void _logcb(const_char_ptr msg) noexcept:
 	global _py_logcb
 	cdef bytes msg2 = msg
 	if _py_logcb is not None:

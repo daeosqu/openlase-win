@@ -22,7 +22,11 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 
 #include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
+#ifdef USE_AVRESAMPLE
 #include <libavresample/avresample.h>
+#else
+#include <libswresample/swresample.h>
+#endif
 #include <libavutil/opt.h>
 #include <libswscale/swscale.h>
 
@@ -35,7 +39,11 @@ struct avfctx {
 
 struct _acontext {
 	struct avfctx av;
+#if USE_AVRESAMPLE
 	AVAudioResampleContext *resampler;
+#else
+	SwrContext *resampler;
+#endif
 	float *oabuf;
 	short *iabuf;
 	int buffered_samples;
@@ -57,5 +65,12 @@ int video_close(VContext *ctx);
 int audio_open(AContext **ctx, char *file, float start_pos);
 int audio_readsamples(AContext *ctx, float *lb, float *rb, int samples);
 int audio_close(AContext *ctx);
+
+/* #ifndef USE_AVRESAMPLE */
+/* #define avresample_convert(resampler, output, zero, maxframe, data, linesize, in_samples) swr_convert(resampler, output, maxframe, data, in_samples) */
+/* #define avresample_alloc_context swr_alloc */
+/* #define avresample_close swr_close */
+/* #define avresample_open swr_init */
+/* #endif */
 
 #endif

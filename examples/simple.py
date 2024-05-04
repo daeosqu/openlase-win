@@ -1,4 +1,4 @@
-#!/usr/bin/python3
+#!python3
 #         OpenLase - a realtime laser graphics toolkit
 #
 # Copyright (C) 2009-2011 Hector Martin "marcan" <hector@marcansoft.com>

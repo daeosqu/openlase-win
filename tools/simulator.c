@@ -17,9 +17,10 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
+#include "ol_compat.h"
+
 #include <stdio.h>
 #include <errno.h>
-#include <unistd.h>
 #include <string.h>
 #include <stdlib.h>
 #include <math.h>
@@ -34,6 +35,13 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include <GL/gl.h>
 #include <GL/glu.h>
 #endif
+#ifdef _MSC_VER
+#include <getopt.h>
+#endif
+
+#define DEFAULT_FRAMERATE 60
+
+float framerate = DEFAULT_FRAMERATE;
 
 int window;
 
@@ -109,11 +117,6 @@ static void jack_shutdown (void *arg)
 	exit (1);
 }
 
-#define max(a,b) \
-   ({ __typeof__ (a) _a = (a); \
-       __typeof__ (b) _b = (b); \
-     _a > _b ? _a : _b; })
-
 static inline void laser_color(float r, float g, float b, float ascale)
 {
 	if (r < 0)
@@ -130,7 +133,7 @@ static inline void laser_color(float r, float g, float b, float ascale)
 		b = 2.0;
 
 	float l = (r + g + b) / 3.0f;
-	float m = max(r,max(g,b));
+	float m = MAX(r,MAX(g,b));
 
 	if (l > 1.0) {
 		r = g = b = l - 1.0;
@@ -151,7 +154,59 @@ void draw_gl(void)
 	int i, ridx;
 
 	static int fno=0;
+
 	fno++;
+
+#if 1 /* SHOW_FPS */
+
+    static int old_fno_short=0;
+    static int old_fno_fps=0;
+    double diff_time_short;
+    double diff_time_fps;
+
+#if defined(__MINGW32__) || defined(__MINGW64__)
+#define TV_TIMEVAL timeval
+#define TV_GETTIMEOFDAY(a) gettimeofday(a, NULL)
+#define TV_DIFF(a, b) (a.tv_sec - b.tv_sec + (double)(a.tv_usec - b.tv_usec) / 1000000)
+#else
+#define TV_TIMEVAL timespec
+#define TV_GETTIMEOFDAY(a) timespec_get(a, TIME_UTC)
+#define TV_DIFF(a, b) (a.tv_sec - b.tv_sec + (double)(a.tv_nsec - b.tv_nsec) / 1000000000)
+#endif
+
+    static struct TV_TIMEVAL last_time_short = { 0, 0 };
+    static struct TV_TIMEVAL last_time_fps = { 0, 0 };
+    struct TV_TIMEVAL tv;
+    int warnned = 0;
+
+    if (last_time_short.tv_sec == 0) {
+        TV_GETTIMEOFDAY(&last_time_short);
+        TV_GETTIMEOFDAY(&last_time_fps);
+    }
+    TV_GETTIMEOFDAY(&tv);
+    diff_time_short = TV_DIFF(tv, last_time_short);
+
+    diff_time_fps = TV_DIFF(tv, last_time_fps);
+    if (diff_time_fps > 3.0 && fno - old_fno_fps > 0) {
+        double fps = (fno - old_fno_fps) / diff_time_fps;
+        fprintf(stderr, "FPS: %.1f\n", fps);
+        last_time_fps = tv;
+        old_fno_fps=fno;
+    }
+
+    if (diff_time_short > 1.0 && fno - old_fno_short > 3) {
+        double fps = (fno - old_fno_short) / diff_time_short;
+        double minimum_fps = framerate * 0.8;
+        if (fps < minimum_fps) {
+            fprintf(stderr, "warning: frame rate slowdown: %.1f < %d\n", fps, (int)framerate);
+            //warnned = 1;
+        }
+        last_time_short = tv;
+        old_fno_short=fno;
+    }
+
+#endif /* SHOW_FPS */
+
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	glLoadIdentity();
 	glLineWidth(psize);
@@ -197,9 +252,16 @@ void draw_gl(void)
 		float d = sqrtf((s.x-lx)*(s.x-lx) + (s.y-ly)*(s.y-ly));
 		if (d == 0)
 			d = 0.0001;
+#ifdef NO_CUSTOM_DFACTOR
 		float dfactor = 0.01/d;
 		if (dfactor > 0.5)
 			dfactor = 0.5;
+#else
+        // I like more brightness
+        float dfactor = 0.5/d;
+        if (dfactor > 0.9)
+            dfactor = 0.9;
+#endif
 
 		int age = HIST_SAMPLES-i;
 		float factor;
@@ -275,11 +337,46 @@ void init_gl(int width, int height)
 	resize_gl(width, height);
 }
 
+void gl_timer(int arg)
+{
+	glutPostRedisplay();
+	glutTimerFunc(1000 / framerate, &gl_timer, 0);
+}
+
+void usage(const char *argv0)
+{
+	printf("Usage: %s [options]\n\n", argv0);
+	printf("Options:\n");
+	printf("-r FLOAT  Force framerate (default: %d)\n", DEFAULT_FRAMERATE);
+}
+
 int main (int argc, char *argv[])
 {
 	static const char jack_client_name[] = "simulator";
 	jack_status_t jack_status;
+	int optchar;
 
+	setvbuf(stdout, NULL, _IONBF, 0);
+	setvbuf(stderr, NULL, _IONBF, 0);
+
+	while ((optchar = getopt(argc, argv, "h:r:")) != -1) {
+		switch (optchar) {
+			case 'h':
+			case '?':
+				usage(argv[0]);
+				return 0;
+			case 'r':
+				framerate = atof(optarg);
+				break;
+		}
+	}
+
+	if (optind != argc) {
+		usage(argv[0]);
+		return 1;
+	}
+
+	fprintf (stderr, "GL frame rate: %.1f FPS\n", framerate);
 
 	glutInit(&argc, argv);
 
@@ -290,7 +387,7 @@ int main (int argc, char *argv[])
 	window = glutCreateWindow("OpenLase Simulator");
 
 	glutDisplayFunc(&draw_gl);
-	glutIdleFunc(&draw_gl);
+	glutTimerFunc(0, &gl_timer, 0);
 	glutReshapeFunc(&resize_gl);
 	glutKeyboardFunc(&key_gl);
 	init_gl(640, 640);

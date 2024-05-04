@@ -1,4 +1,4 @@
-#!/usr/bin/python3
+#!python3
 # -*- coding: utf-8 -*-
 #         OpenLase - a realtime laser graphics toolkit
 #
@@ -23,17 +23,19 @@ from PIL import Image
 
 def fetch_ugo(illust_id):
     cj = http.cookiejar.CookieJar()
+    opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(cj))
     try:
         print('Logging in...')
         user, password = open(os.environ['HOME'] + '/.pixiv_credentials').read().strip().split(':', 1)
-        opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(cj))
         fd = opener.open('https://www.secure.pixiv.net/login.php')
+        #TODO: fd = opener.open('https://accounts.pixiv.net/login')
         fd.read()
         fd.close()
         data = urllib.parse.urlencode({
             'mode': 'login',
             'pixiv_id': user,
-            'pass': password,
+            #'pass': password,
+            'password': password,
             'skip': '1'
         })
         post = urllib.request.Request('https://www.secure.pixiv.net/login.php', data)
@@ -47,6 +49,7 @@ def fetch_ugo(illust_id):
     meta = None
     fd = opener.open(url)
     for line in fd:
+        line = line.decode('utf-8')
         if 'ugokuIllustData' in line:
             meta = json.loads(line.split('ugokuIllustData', 1)[1]
                               .strip()[1:].split(';', 1)[0])
@@ -63,7 +66,7 @@ def fetch_ugo(illust_id):
     return meta, zip_data
 
 def trace_ugo(meta, zip_data):
-    zipfd = io.StringIO(zip_data)
+    zipfd = io.BytesIO(zip_data)
     zf = zipfile.ZipFile(zipfd, 'r')
 
     tracer = None
@@ -71,7 +74,7 @@ def trace_ugo(meta, zip_data):
 
     for frame_meta in meta['frames']:
         file_data = zf.open(frame_meta['file']).read()
-        fd = io.StringIO(file_data)
+        fd = io.BytesIO(file_data)
         im = Image.open(fd)
         im = im.convert('I')
         if tracer is None:
@@ -81,7 +84,7 @@ def trace_ugo(meta, zip_data):
             tracer.threshold = 30
             tracer.threshold2 = 10
             tracer.sigma = 1.2
-        s = im.tostring('raw', 'I')
+        s = im.tobytes('raw', 'I')
         if len(s) == (width * height * 4):
              s = s[::4] #XXX workaround PIL bug
         objects = tracer.trace(s)

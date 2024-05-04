@@ -1,18 +1,23 @@
 #include <stdio.h>
 #include <errno.h>
+#ifdef __unix__
 #include <unistd.h>
+#endif
 #include <string.h>
 #include <stdlib.h>
 #include <jack/jack.h>
 #include <math.h>
 
-#include <libmodplug/modplug.h>
+#include <modplug.h>
 
 #include "libol.h"
 #include "text.h"
 #include "ilda.h"
 
 #include "trace.h"
+
+#define random rand
+#define srandom srand
 
 Font *font;
 
@@ -93,7 +98,11 @@ float render(void)
 
 	audiotime = gbl_time * AB;
 
-	printf("Frame time: %f, FPS:%f, Avg FPS:%f, Audio: %f\n", ftime, 1/ftime, gbl_frames/gbl_time, audiotime);
+	if ((gbl_frames % 200) == 0) {
+		printf("Frame time: %f, FPS:%f, Avg FPS:%f, Audio: %f\n", ftime, 1/ftime, gbl_frames/gbl_time, audiotime);
+		fflush(stdout);
+	}
+
 	return ftime;
 }
 

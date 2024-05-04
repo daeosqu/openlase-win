@@ -343,9 +343,10 @@ void OutputSettings::loadSettings(QString fileName)
 				OutputSetting *s = findSetting(name);
 				if (!s)
 					qDebug() << "Unknown setting" << name;
-				else
+				else {
 					s->setValue(val);
 					s->updateValue();
+                }
 			}
 		}
 	}

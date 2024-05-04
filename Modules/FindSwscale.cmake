@@ -12,9 +12,11 @@
 
 include(FindPackageHandleStandardArgs)
 
-find_package(PkgConfig)
-pkg_check_modules(PC_SWSCALE libswscale)
-set(SWSCALE_DEFINITIONS ${PC_SWSCALE_CFLAGS_OTHER})
+if(NOT MSVC)
+	find_package(PkgConfig)
+	pkg_check_modules(PC_SWSCALE libswscale)
+	set(SWSCALE_DEFINITIONS ${PC_SWSCALE_CFLAGS_OTHER})
+endif()
 
 find_library(SWSCALE_LIBRARIES swscale
     HINTS ${PC_SWSCALE_LIBDIR} ${PC_SWSCALE_LIBRARY_DIRS}

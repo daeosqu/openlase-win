@@ -16,7 +16,10 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #
 
+cmake_policy(SET CMP0020 NEW)
+
 if(Qt5Widgets_FOUND)
+
   QT5_WRAP_UI(output_UIS_H output_settings.ui)
   QT5_WRAP_CPP(output_MOCS output_settings.h)
 
@@ -24,6 +27,11 @@ if(Qt5Widgets_FOUND)
 
   add_executable(output output.cpp output_settings.cpp ${output_UIS_H} ${output_MOCS})
   target_link_libraries(output ${JACK_LIBRARIES} Qt5::Widgets)
+
+  install(TARGETS output RUNTIME DESTINATION bin)
+
 else()
+
   message(STATUS "Will NOT build output (Qt4 missing)")
+
 endif()

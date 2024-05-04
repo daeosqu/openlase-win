@@ -25,17 +25,14 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  * course use any other files, though for the tracer you'll likely have to
  * tweak the vparms depending on its complexity. */
 
+#include "ol_compat.h"
 #include "libol.h"
 
 #include <stdio.h>
 #include <errno.h>
-#include <unistd.h>
 #include <string.h>
 #include <stdlib.h>
 #include <math.h>
-#include <sys/select.h>
-#include <termios.h>
-#include <unistd.h>
 #include <curses.h>
 
 // 4:3 aspect presentation
@@ -355,11 +352,15 @@ int main (int argc, char *argv[])
 		clrtoeol();
 		refresh();
 
+#ifdef HAVE_fd_set
 		fd_set rfds;
+#endif
 		struct timeval tv;
 		tv.tv_sec = tv.tv_usec = 0;
+#ifdef HAVE_fd_set
 		FD_ZERO(&rfds);
 		FD_SET(0, &rfds);
+#endif
 
 		while(1) {
 			int ch = getch();

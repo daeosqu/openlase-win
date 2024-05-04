@@ -664,6 +664,11 @@ BRANCH_INSTR jz, je, jnz, jne, jl, jle, jnl, jnle, jg, jge, jng, jnge, ja, jae, 
 %macro cvisible 1-2+ "" ; name, [PROLOGUE args]
     cglobal_internal 0, %1 %+ SUFFIX, %2
 %endmacro
+
+%ifndef NO_MINGW
+%xdefine NO_MINGW 0
+%endif
+
 %macro cglobal_internal 2-3+
     %if %1
         %xdefine %%FUNCTION_PREFIX private_prefix
@@ -673,7 +678,11 @@ BRANCH_INSTR jz, je, jnz, jne, jl, jle, jnl, jnle, jg, jge, jng, jnge, ja, jae, 
         %xdefine %%VISIBILITY
     %endif
     %ifndef cglobaled_%2
-        %xdefine %2 mangle(%%FUNCTION_PREFIX %+ _ %+ %2)
+        %if NO_MINGW == 1 || ARCH_X86_64
+            %xdefine %2 mangle(%%FUNCTION_PREFIX %+ _ %+ %2)
+        %else
+            %xdefine %2 mangle(_ %+ %%FUNCTION_PREFIX %+ _ %+ %2)
+        %endif
         %xdefine %2.skip_prologue %2 %+ .skip_prologue
         CAT_XDEFINE cglobaled_, %2, 1
     %endif

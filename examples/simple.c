@@ -18,10 +18,13 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
 #include "libol.h"
+#include "ol_compat.h"
 
 #include <stdio.h>
 #include <errno.h>
+#if __unix__
 #include <unistd.h>
+#endif
 #include <string.h>
 #include <stdlib.h>
 #include <jack/jack.h>
