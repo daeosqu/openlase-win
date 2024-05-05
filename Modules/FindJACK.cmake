@@ -19,7 +19,6 @@ if(JACK_LIBRARY AND JACK_INCLUDE_DIR)
 elseif(MSVC OR MINGW OR CYGWIN)
 
   if (NOT _JACK_root_dir)
-      #set(_JACK_root_dir "c:/Program Files (x86)/Jack")
       set(_JACK_root_dir "c:/Program Files/JACK2")
   endif ()
 
@@ -35,7 +34,7 @@ elseif(MSVC OR MINGW OR CYGWIN)
       set(_JACK_LIB_NAME "lib${_JACK_LIB_NAME}.lib")
   endif()
 
-  FIND_PATH(JACK_INCLUDE_DIR NAMES jack/jack.h
+  find_path(JACK_INCLUDE_DIR NAMES jack/jack.h
       HINTS
       ${_JACK_root_dir}/includes
       ${_JACK_root_dir}/include
@@ -61,23 +60,11 @@ else()
   pkg_check_modules(JACK jack)
   set(JACK_DEFINITIONS ${PC_JACK_CFLAGS_OTHER})
 
-  set(_JACK_LIB_NAME jack)
-  if((MINGW OR CYGWIN OR MSVC) AND CMAKE_SIZEOF_VOID_P EQUAL 8)
-    set(_JACK_LIB_NAME jack64)
-  endif()
-
-  if(NOT DEFINED PC_JACK_LIBDIR)
-      set(PC_JACK_LIBDIR "C:/Program Files (x86)/Jack/lib")
-  endif()
-  if(NOT DEFINED PC_JACK_INCLUDEDIR)
-      set(PC_JACK_LIBDIR "C:/Program Files (x86)/Jack/includes")
-  endif()
-
-  find_library(JACK_LIBRARIES ${_JACK_LIB_NAME}
+  find_library(JACK_LIBRARIES jack
     HINTS ${PC_JACK_LIBDIR} ${PC_JACK_LIBRARY_DIRS}
   )
 
-  Find_path(JACK_INCLUDE_DIR jack.h
+  find_path(JACK_INCLUDE_DIR jack.h
     HINTS ${PC_JACK_INCLUDEDIR} ${PC_JACK_INCLUDE_DIRS}
     PATH_SUFFIXES jack
   )
