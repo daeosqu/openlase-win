@@ -477,7 +477,7 @@ cpdef setScissor(tuple start, tuple end):
 	olSetScissor(x1, y1, x2, y2)
 
 _py_logcb = None
-cdef void _logcb(const_char_ptr msg) noexcept:
+cdef void _logcb(const_char_ptr msg) noexcept:  # remove noexcept for older cython
 	global _py_logcb
 	cdef bytes msg2 = msg
 	if _py_logcb is not None:

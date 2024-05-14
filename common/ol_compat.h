@@ -31,6 +31,8 @@
 #define sleep_millis(n) Sleep(n)
 #define sleep(n) Sleep(n * 1000)
 
+#define NULL_DEVICE "nul"
+
 #else
 /* for POSIX-ly system */
 
@@ -46,8 +48,8 @@
 #endif /* _MSC_VER */
 
 #ifndef MAX
-#define MAX(a,b) (((a) > (b)) ? (a) : (b))
-#define MIN(a,b) (((a) < (b)) ? (a) : (b))
+#define MAX(a, b) (((a) > (b)) ? (a) : (b))
+#define MIN(a, b) (((a) < (b)) ? (a) : (b))
 #endif
 
 #endif

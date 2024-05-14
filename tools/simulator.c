@@ -23,6 +23,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include <errno.h>
 #include <string.h>
 #include <stdlib.h>
+#include <stdarg.h>
 #include <math.h>
 #include <jack/jack.h>
 
@@ -76,6 +77,35 @@ int buf_widx = 0;
 
 float psize = 2;
 
+int opt_quiet = 0;
+int opt_verbose = 0;
+int opt_fullscreen = 0;
+
+int my_fprintf(FILE *stream, const char *format, ...) {
+    va_list args;
+    int result = 0;
+    va_start(args, format);
+    if (!opt_quiet)
+        result = vfprintf(stream, format, args);
+    va_end(args);
+    return result;
+}
+
+int my_printf(const char *format, ...) {
+    va_list args;
+    int result = 0;
+    va_start(args, format);
+    if (!opt_quiet)
+        result = vprintf(format, args);
+    va_end(args);
+    return result;
+}
+
+#define real_printf printf
+#define real_fprintf fprintf
+#define printf my_printf
+#define fprintf my_fprintf
+
 static int process (nframes_t nframes, void *arg)
 {
 	sample_t *i_x = (sample_t *) jack_port_get_buffer (in_x, nframes);
@@ -110,7 +140,7 @@ static int srate (nframes_t nframes, void *arg)
 {
 	rate = nframes;
 	if(rate % 1000) {
-		printf("error: the sample rate should be a multiple of 1000\n");
+		real_fprintf(stderr, "error: the sample rate should be a multiple of 1000\n");
 		exit(1);
 	}
 	printf ("Sample rate: %u/sec\n", nframes);
@@ -157,18 +187,10 @@ static inline void laser_color(float r, float g, float b, float ascale)
 void draw_gl(void)
 {
 	int i, ridx;
-
-	static int fno=0;
-
+	static int fno = 0;
 	fno++;
 
 #if 1 /* SHOW_FPS */
-
-    static int old_fno_short=0;
-    static int old_fno_fps=0;
-    double diff_time_short;
-    double diff_time_fps;
-
 #if defined(__MINGW32__) || defined(__MINGW64__)
 #define TV_TIMEVAL timeval
 #define TV_GETTIMEOFDAY(a) gettimeofday(a, NULL)
@@ -180,34 +202,33 @@ void draw_gl(void)
 #endif
 
     static struct TV_TIMEVAL last_time_short = { 0, 0 };
-    static struct TV_TIMEVAL last_time_fps = { 0, 0 };
+    static struct TV_TIMEVAL last_warned = { 0, 0 };
     struct TV_TIMEVAL tv;
-    int warnned = 0;
+    static double fps = 0;
+    static int old_fno = 0;
+    double diff_time;
 
     if (last_time_short.tv_sec == 0) {
         TV_GETTIMEOFDAY(&last_time_short);
-        TV_GETTIMEOFDAY(&last_time_fps);
     }
     TV_GETTIMEOFDAY(&tv);
-    diff_time_short = TV_DIFF(tv, last_time_short);
+    diff_time = TV_DIFF(tv, last_time_short);
 
-    diff_time_fps = TV_DIFF(tv, last_time_fps);
-    if (diff_time_fps > 3.0 && fno - old_fno_fps > 0) {
-        double fps = (fno - old_fno_fps) / diff_time_fps;
-        fprintf(stderr, "FPS: %.1f\n", fps);
-        last_time_fps = tv;
-        old_fno_fps=fno;
-    }
-
-    if (diff_time_short > 1.0 && fno - old_fno_short > 3) {
-        double fps = (fno - old_fno_short) / diff_time_short;
-        double minimum_fps = framerate * 0.8;
-        if (fps < minimum_fps) {
-            fprintf(stderr, "warning: frame rate slowdown: %.1f < %d\n", fps, (int)framerate);
-            //warnned = 1;
-        }
+    if (diff_time > 1.0) {
+        fps = (fno - old_fno) / diff_time;
         last_time_short = tv;
-        old_fno_short=fno;
+        old_fno = fno;
+
+        if (opt_verbose)
+            fprintf(stderr, "FPS: %.1f\n", fps);
+
+        double ratio = opt_verbose ? 0.1 : 0.5;
+        double minimum_fps = framerate * (1.0 - ratio);
+        double diff_time_warned = TV_DIFF(tv, last_warned);
+        if (diff_time_warned > 1.0 && fps < minimum_fps) {
+            fprintf(stderr, "warning: frame rate slowdown: %.1f < %d - %.1f%\n", fps, (int)framerate, ratio * 100);
+            last_warned = tv;
+        }
     }
 
 #endif /* SHOW_FPS */
@@ -350,9 +371,12 @@ void gl_timer(int arg)
 
 void usage(const char *argv0)
 {
-	printf("Usage: %s [options]\n\n", argv0);
-	printf("Options:\n");
-	printf("-r FLOAT  Force framerate (default: %d)\n", DEFAULT_FRAMERATE);
+	real_printf("Usage: %s [options]\n\n", argv0);
+	real_printf("Options:\n");
+	real_printf("-v          Verbose mode\n");
+	real_printf("-q          Very quietly mode\n");
+	real_printf("-r FLOAT    Maximum Framerate (default: %d)\n", DEFAULT_FRAMERATE);
+	real_printf("-s INTEGER  Histgram Samples [%d-%d] (default: %d)\n", MIN_HIST_SAMPLES, MAX_HIST_SAMPLES, DEFAULT_FRAMERATE);
 }
 
 int main (int argc, char *argv[])
@@ -364,12 +388,21 @@ int main (int argc, char *argv[])
 	setvbuf(stdout, NULL, _IONBF, 0);
 	setvbuf(stderr, NULL, _IONBF, 0);
 
-	while ((optchar = getopt(argc, argv, "h:r:s:")) != -1) {
+	while ((optchar = getopt(argc, argv, "h?vqFr:s:")) != -1) {
 		switch (optchar) {
 			case 'h':
 			case '?':
 				usage(argv[0]);
 				return 0;
+			case 'q':
+                opt_quiet = 1;
+                break;
+			case 'v':
+                opt_verbose = 1;
+				break;
+			case 'F':
+                opt_fullscreen = 1;
+				break;
 			case 'r':
 				framerate = atof(optarg);
 				break;
@@ -390,7 +423,8 @@ int main (int argc, char *argv[])
 		return 1;
 	}
 
-	fprintf (stderr, "GL frame rate: %.1f FPS\n", framerate);
+    if (opt_verbose)
+        fprintf (stderr, "GL frame rate: %.1f FPS\n", framerate);
 
 	glutInit(&argc, argv);
 
@@ -400,6 +434,9 @@ int main (int argc, char *argv[])
 
 	window = glutCreateWindow("OpenLase Simulator");
 
+    if (opt_fullscreen)
+        glutFullScreen();
+
 	glutDisplayFunc(&draw_gl);
 	glutTimerFunc(0, &gl_timer, 0);
 	glutReshapeFunc(&resize_gl);
@@ -407,7 +444,7 @@ int main (int argc, char *argv[])
 	init_gl(640, 640);
 
 	if ((client = jack_client_open(jack_client_name, JackNullOption, &jack_status)) == 0) {
-		fprintf (stderr, "jack server not running?\n");
+		real_printf (stderr, "jack server not running?\n");
 		return 1;
 	}
 
@@ -423,7 +460,7 @@ int main (int argc, char *argv[])
 	in_b = jack_port_register (client, "in_b", JACK_DEFAULT_AUDIO_TYPE, JackPortIsInput, 0);
 
 	if (jack_activate (client)) {
-		fprintf (stderr, "cannot activate client");
+		real_printf (stderr, "cannot activate client");
 		return 1;
 	}
 

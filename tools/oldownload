@@ -1,0 +1,10 @@
+#!/usr/bin/bash
+
+if [ ! -x yt-dlp ]; then
+   if ! pip install yt-dlp; then
+      echo 'Can not install yt-dlp!' >&2
+      exit 1
+   fi
+fi
+
+yt-dlp "$@"

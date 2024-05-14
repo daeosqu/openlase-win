@@ -25,7 +25,7 @@ check_symbol_exists(_aligned_malloc malloc.h HAVE_ALIGNED_MALLOC)
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/config.h.in ${CMAKE_CURRENT_BINARY_DIR}/config.h)
 
 include_directories (${CMAKE_SOURCE_DIR}/include ${CMAKE_CURRENT_BINARY_DIR}
-	${JACK_INCLUDE_DIRS})
+	${JACK_INCLUDE_DIR})
 
 if(MSVC)
 	add_definitions(-DBUILD_LIBOL_DLL)
@@ -82,6 +82,7 @@ if(BUILD_TRACER)
 		  endif()
 	    set(TRACER_SOURCES trace.c ${YASM_OBJS})
 	    set(COMPILED_YASM_OBJS ${YASM_OBJS})
+      message(STATUS "Will build tracer (SSE2 version)")
     else()
       message(STATUS "YASM Not Found!")
 	  endif()
@@ -109,6 +110,6 @@ set_target_properties(ol PROPERTIES VERSION 0 SOVERSION 0)
 add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/fontdef.c
     DEPENDS ${CMAKE_SOURCE_DIR}/tools/genfont.py
     MAIN_DEPENDENCY laserfont.svg
-    COMMAND ${Python_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/genfont.py ${CMAKE_CURRENT_SOURCE_DIR}/laserfont.svg ${CMAKE_CURRENT_BINARY_DIR}/fontdef.c default_font)
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/genfont.py ${CMAKE_CURRENT_SOURCE_DIR}/laserfont.svg ${CMAKE_CURRENT_BINARY_DIR}/fontdef.c default_font)
 
 install(TARGETS ol LIBRARY DESTINATION ${CMAKE_INSTALL_PREFIX}/lib)

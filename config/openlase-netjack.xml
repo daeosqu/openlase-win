@@ -1,0 +1,35 @@
+<!DOCTYPE patchbay>
+<patchbay name="openlase-netjack" version="0.9.6">
+ <output-sockets>
+  <socket name="libol-laser" type="jack-audio" client="libol" exclusive="off">
+   <plug>out_x</plug>
+   <plug>out_y</plug>
+   <plug>out_r</plug>
+   <plug>out_g</plug>
+   <plug>out_b</plug>
+  </socket>
+  <socket name="libol-audio" type="jack-audio" client="libol" exclusive="off">
+   <plug>out_al</plug>
+   <plug>out_ar</plug>
+  </socket>
+ </output-sockets>
+ <input-sockets>
+  <socket name="system-laser-net-out" type="jack-audio" client="system" exclusive="off">
+   <plug>playback_1</plug>
+   <plug>playback_2</plug>
+   <plug>playback_3</plug>
+   <plug>playback_4</plug>
+   <plug>playback_5</plug>
+  </socket>
+  <socket name="system-audio-net-out" type="jack-audio" client="system" exclusive="off">
+   <plug>playback_6</plug>
+   <plug>playback_7</plug>
+  </socket>
+ </input-sockets>
+ <slots/>
+ <cables>
+  <cable input="system-laser-net-out" type="jack-audio" output="libol-laser"/>
+  <cable input="system-audio-net-out" type="jack-audio" output="libol-audio"/>
+ </cables>
+</patchbay>
+

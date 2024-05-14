@@ -34,6 +34,10 @@ install(TARGETS cal RUNTIME DESTINATION bin)
 if(FFMPEG_FOUND AND BUILD_TRACER)
  #include_directories(${FFMPEG_INCLUDE_DIR})
  add_executable(playvid playvid.c)
+if(MSVC)
+ target_sources(playvid PRIVATE ../utf8api.manifest)
+ target_compile_options(playvid PRIVATE /utf-8)
+endif()
  target_include_directories(playvid PRIVATE ${FFMPEG_INCLUDE_DIRS})
  target_compile_options(playvid PRIVATE ${FFMPEG_CFLAGS_OTHER})
  target_link_directories(playvid PRIVATE ${FFMPEG_LIBRARY_DIRS})
@@ -46,32 +50,16 @@ endif()
 
 if(FFMPEG_FOUND AND BUILD_TRACER)
   add_executable(playvid2 playvid2.c)
-  set_property(TARGET playvid2 PROPERTY C_STANDARD 99)
-  add_compile_options("--std=c99")
+if(MSVC)
+  target_sources(playvid2 PRIVATE ../utf8api.manifest)
+  target_compile_options(playvid2 PRIVATE /utf-8)
+endif()
+  target_compile_features(playvid2 PUBLIC c_std_99)
   target_include_directories(playvid2 PRIVATE ${FFMPEG_INCLUDE_DIRS})
   target_compile_options(playvid2 PRIVATE ${FFMPEG_CFLAGS_OTHER})
   target_link_directories(playvid2 PRIVATE ${FFMPEG_LIBRARY_DIRS})
   target_link_options(playvid2 PRIVATE ${FFMPEG_LDFLAGS_OTHER})
   target_link_libraries(playvid2 ol ${FFMPEG_LIBRARIES} ${GETOPT_LIBRARY} ${THREADS_LIBRARY} ${COMMON_LIBRARIES})
-
-  if(MSVC)
-    add_custom_command(TARGET playvid2 POST_BUILD
-      COMMAND ${CMAKE_COMMAND} -E copy_if_different
-      $<$<CONFIG:Debug>:${THREADS_LIBRARY_DEBUG_DLL}>
-      $<$<CONFIG:Release>:${THREADS_LIBRARY_RELEASE_DLL}>
-      $<TARGET_FILE_DIR:playvid2>)
-  elseif(MINGW)
-    if (DEFINED PORTAUDIO_LIBRARY_DLL)
-      add_custom_command(TARGET playvid2 POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        ${PORTAUDIO_LIBRARY_DLL}
-        $<TARGET_FILE_DIR:playvid2>)
-      target_include_directories(playvid2 PRIVATE ${PORTAUDIO_INCLUDE_DIRS})
-      link_directories(${PORTAUDIO_LIBDIR})
-      target_link_libraries(playvid2 ${PORTAUDIO_LIBRARIES})
-    endif()
-  endif()
-
   install(TARGETS playvid2 RUNTIME DESTINATION bin)
 else()
   message(STATUS "Will NOT build playvid2 (FFmpeg or tracer missing)")
@@ -80,7 +68,7 @@ endif()
 if(OPENGL_FOUND AND GLUT_FOUND)
   add_executable(simulator simulator.c)
   include_directories(${OPENGL_INCLUDE_DIRS} ${GLUT_INCLUDE_DIR})
-  target_link_libraries(simulator ${MATH_LIBRARY} ${OPENGL_LIBRARIES} ${GLUT_LIBRARY} ${JACK_LIBRARIES} ${GETOPT_LIBRARY} ${COMMON_LIBRARY})
+  target_link_libraries(simulator ${MATH_LIBRARY} ${OPENGL_LIBRARIES} ${GLUT_LIBRARIES} ${JACK_LIBRARIES} ${GETOPT_LIBRARY} ${COMMON_LIBRARY})
   #install(TARGETS simulator RUNTIME DESTINATION bin)
   install(TARGETS simulator
       RUNTIME DESTINATION bin

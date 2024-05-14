@@ -1,5 +1,0 @@
-$env:PATH="$PSScriptRoot\build\libol;$env:PATH"
-$env:PATH="C:\Qt\Qt5.14.2\5.14.2\msvc2017_64\bin;$env:PATH"
-$env:PATH="C:\opt\python311;$env:PATH"
-$env:PATH="C:\opt\python311\Scripts;$env:PATH"
-$env:PYTHONPATH="$PSScriptRoot\build\python"

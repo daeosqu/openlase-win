@@ -63,11 +63,14 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #endif
 
 #ifdef NDEBUG
+#else /* !NDEBUG */
+#endif /* NDEBUG */
+
+#if 0 /* defined(NDEBUG) */
 #define fdebugf( ... ) ((void)0)
 #define debugf( ... ) ((void)0)
 #define debug( fmt, ... ) ((void)0)
-#else /* !NDEBUG */
-#include <stdio.h>
+#else
 #define fdebugf( file, fmt, ... ) \
     fprintf( file, "[%s:%u %s()] " fmt, __FILE__, __LINE__, __func__, ##__VA_ARGS__ )
 #define debugf( ... ) \
@@ -75,6 +78,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #define debug( fmt, ... ) \
     fprintf( stdout, "[%s:%u %s()] " fmt "\n", __FILE__, __LINE__, __func__, ##__VA_ARGS__ )
 #endif /* NDEBUG */
+
 
 typedef struct {
 	uint8_t *data;
@@ -956,8 +960,8 @@ void hsv2rgb(float h, float s, float v, int *pR, int *pG, int *pB) {
 }
 
 void rgb2hsv(int r, int g, int b, int *pH, float *pS, float *pV) {
-    float max = max(max(r, g), b);
-    float min = min(min(r, g), b);
+    float max = MAX(MAX(r, g), b);
+    float min = MIN(MIN(r, g), b);
     *pH = *pS = 0;
     *pV = max;
     if (max != min) {
@@ -1149,14 +1153,12 @@ void *display_thread(void *arg)
 			OLTracePoint *p = o->points;
             uint8_t *ptr;
             int count;
-            float total_weight;
             int r, g, b;
             float rr, gg, bb;
             int h;
             float s, v;
             rr = gg = bb = 0;
             count = 0;
-            total_weight = 0;
 			for (j = 0; j < o->count; j++) {
 				if (j % ctx->settings.color_decimation == 0) {
                     ptr = ctx->cur_color_frame->data + ctx->cur_color_frame->stride * (int)roundf(p->y * ctx->color_scale) + (int)roundf(p->x * ctx->color_scale) * 3;
@@ -1164,27 +1166,19 @@ void *display_thread(void *arg)
                     static const int offsets_y[] = {0, -1, -1, 0, 1, 1,  1,  0, -1};
                     static const int weights[] = {10, 5, 3, 5, 3, 5, 3, 5, 3};
                     int dx = 0;
+                    float total_weight = 0;
                     for (int k = 0; k < 9; k++) {
-                        int ox = p->x + offsets_x[k] * 2;
-                        int oy = p->y + offsets_y[k] * 2;
-                        if (ox < 0)
-                            ox = 0;
-                        if (oy < 0)
-                            oy = 0;
-                        if (ox >= ctx->width)
-                            ox = ctx->width-1;
-                        if (oy >= ctx->height)
-                            oy = ctx->height-1;
-                        //dprintf("%d, %d\n", ox, oy);
+                        int ox = p->x + offsets_x[k] * 8;
+                        int oy = p->y + offsets_y[k] * 8;
+                        ox = MAX(ox, 0);
+                        oy = MAX(oy, 0);
+                        ox = MIN(ox, ctx->width-1);
+                        oy = MIN(oy, ctx->height-1);
                         uint8_t *ptr2 = ctx->cur_color_frame->data + ctx->cur_color_frame->stride * (int)roundf(oy * ctx->color_scale) + (int)roundf(ox * ctx->color_scale) * 3;
                         int weight = weights[k];
                         r = *ptr2++;
                         g = *ptr2++;
                         b = *ptr2;
-                        rgb2hsv(r, g, b, &h, &s, &v);
-                        if (s < 0.1 && (v > 0.9 || v < 0.1)) {
-                            r = g = b = 200;
-                        }
                         rr += r * weight;
                         gg += g * weight;
                         bb += b * weight;
@@ -1197,20 +1191,24 @@ void *display_thread(void *arg)
 
                     int h;
                     float s, v;
+
                     rgb2hsv(r, g, b, &h, &s, &v);
-                    if (0 && s < 0.1 && (v < 0.1 || v > 0.9)) {
-                        if (v < 0.1)
-                            v = 0.9 + v;
-                        s = s * 0.4 + 0.6;
-                        hsv2rgb(h, s, v, &r, &g, &b);
+
+                    if (s < 0.01) {
+                        h = 0;
+                        s = 0;
                     } else {
-                        s = s * 0.5 + 0.5;
-                        v = v * 0.2 + 0.8;
-                        hsv2rgb(h, s, v, &r, &g, &b);
+                        s = s * 0.8 + 0.2;  // high saturation
+                        s = MIN(s, 0.99);
                     }
+                    v = 1;  // maximum laser power
+
+                    hsv2rgb(h, s, v, &r, &g, &b);
+
                     int color = (r<<16) | (g<<8) | (b);
-                    count++;
+
                     olVertex(p->x, p->y, color);
+                    count++;
                 }
 				p++;
 			}
@@ -1429,12 +1427,12 @@ int main(int argc, char** argv)
         if (ctx->eof) {
             debugf("player: got EOF");
             ctx->exit = 1;
-            Sleep(1000);
+            sleep_millis(1000);
             break;
         }
         pthread_mutex_unlock(&ctx->seek_mutex);
 
         debugf("loop %d\n", i);
-        Sleep(1000);
+        sleep_millis(1000);
     }
 }

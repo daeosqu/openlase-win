@@ -27,7 +27,8 @@ if(CURSES_FOUND AND FFMPEG_FOUND AND BUILD_TRACER)
   )
 
   target_compile_definitions(slides PRIVATE -DPDC_DLL_BUILD)
-  target_include_directories(slides PRIVATE ${CMAKE_SOURCE_DIR}/tools ${FFMPEG_INCLUDE_DIR} ${CURSES_INCLUDE_DIR})
+  target_include_directories(slides PRIVATE ${CMAKE_SOURCE_DIR}/tools ${FFMPEG_INCLUDE_DIRS} ${CURSES_INCLUDE_DIR})
+  target_link_directories(slides PRIVATE ${FFMPEG_LIBRARY_DIRS})
   target_link_libraries(slides ol ${FFMPEG_LIBRARIES} ${CURSES_LIBRARY})
 
   function(svg2ild NAME)
@@ -35,7 +36,7 @@ if(CURSES_FOUND AND FFMPEG_FOUND AND BUILD_TRACER)
       DEPENDS ${CMAKE_SOURCE_DIR}/tools/svg2ild.py
       MAIN_DEPENDENCY ${NAME}.svg
       DEPENDS ${NAME}.svg ${NAME}.cfg
-      COMMAND ${Python_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/svg2ild.py -q ${ARGN} -cfg ${CMAKE_CURRENT_SOURCE_DIR}/${NAME}.cfg ${CMAKE_CURRENT_SOURCE_DIR}/${NAME}.svg ${CMAKE_CURRENT_BINARY_DIR}/${NAME}.ild)
+      COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/svg2ild.py -q ${ARGN} -cfg ${CMAKE_CURRENT_SOURCE_DIR}/${NAME}.cfg ${CMAKE_CURRENT_SOURCE_DIR}/${NAME}.svg ${CMAKE_CURRENT_BINARY_DIR}/${NAME}.ild)
   endfunction()
 
   svg2ild(openlase-logo -noopt)

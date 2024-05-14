@@ -16,42 +16,56 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #
 
-set(Python3_FIND_REGISTRY NEVER)  # Dont find anaconda in registry
-set(Python2_FIND_REGISTRY NEVER)  # Dont find anaconda in registry
-
 cmake_minimum_required(VERSION 3.12)
 
-# vcpkg
-
-# if(CMAKE_GENERATOR MATCHES "^Visual Studio")
-#   if(NOT DEFINED VCPKG_ROOT)
-#     if (DEFINED ENV{VCPKG_ROOT})
-#       set(VCPKG_ROOT $ENV{VCPKG_ROOT})
-#     else()
-#       #set(VCPKG_ROOT "C:/vcpkg")
-#       set(VCPKG_ROOT "$ENV{USERPROFILE}/scoop/apps/vcpkg/current")
-#     endif()
-#   endif()
-#   if(NOT DEFINED CMAKE_TOOLCHAIN_FILE)
-#     set(CMAKE_TOOLCHAIN_FILE "${VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
-#         CACHE STRING "")
-#   endif()
-# endif()
-
-# project
+include(FindPackageHandleStandardArgs)
 
 project(openlase)
 
+set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/Modules/")
+
 include(CheckSymbolExists)
 
-if(CMAKE_C_FLAGS STREQUAL "")
-    set(CMAKE_C_FLAGS "-O3 -g")
+if (UNIX)
+  if(CMAKE_HOST_SYSTEM_VERSION MATCHES "microsoft-standard-WSL2$")
+    set(wsl 2)
+  elseif(CMAKE_HOST_SYSTEM_VERSION MATCHES "-Microsoft$")
+    set(wsl 1)
+  elseif(NOT HAVE_SYS_UTSNAME)
+    set(wsl -1)
+  else()
+    set(wsl 0)
+  endif()
+else()
+  set(wsl 0)
 endif()
 
+# Set compiler options
+
+include_directories("common")
+add_definitions(-DNOMINMAX)
+add_definitions(-D_USE_MATH_DEFINES)
+
 if(MSVC)
-    set(CMAKE_EXE_LINKER_FLAGS "/DYNAMICBASE:NO")
-    add_definitions(-DFREEGLUT_LIB_PRAGMAS=0)
+  set(CMAKE_C_FLAGS "/W1")
+  set(CMAKE_C_FLAGS_RELEASE "/MD /Ox /DNDEBUG")
+  set(CMAKE_CXX_FLAGS_RELEASE ${CMAKE_C_FLAGS_RELEASE})
+  set(CMAKE_CXX_FLAGS_RELEASE ${CMAKE_CXX_FLAGS_RELEASE})
+  set(CMAKE_EXE_LINKER_FLAGS "/DYNAMICBASE:NO")
+  add_definitions(-DFREEGLUT_LIB_PRAGMAS=0)
+  set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG "${OUTPUT_DIRECTORY}")
+  set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE "${OUTPUT_DIRECTORY}")
+  set(CMAKE_LIBRARY_OUTPUT_DIRECTORY_DEBUG "${OUTPUT_DIRECTORY}")
+  set(CMAKE_LIBRARY_OUTPUT_DIRECTORY_RELEASE "${OUTPUT_DIRECTORY}")
+  set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY_DEBUG "${OUTPUT_DIRECTORY}")
+  set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY_RELEASE "${OUTPUT_DIRECTORY}")
+else()
+  set(CMAKE_C_FLAGS_RELEASE "-O3")
+  set(CMAKE_CXX_FLAGS_RELEASE "-O3")
+  add_compile_options (-fdiagnostics-color=always)
 endif()
+
+# Set default install prefix
 
 if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
   if(NOT MSVC)
@@ -69,159 +83,29 @@ if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
   endif()
 endif()
 
-if(CMAKE_SIZEOF_VOID_P EQUAL 8)
-    set(BITS 64)
-else()
-    set(BITS 32)
-endif()
-
-set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/Modules/")
-
-if(CYGWIN)
-    # add .lib for find libjack64.lib (FindJack.cmake)
-    set(CMAKE_FIND_LIBRARY_SUFFIXES ".dll.a" ".a" ".lib")
-endif()
-
-# Thrads
+# Find Thread library
 
 if(MSVC)
-    include(FindPackageHandleStandardArgs)
-
-    # private pthreads4w build directory (not a vcpkg)
-    #set(PThreads4W_DIR ${CMAKE_CURRENT_LIST_DIR}/3rdparty/pthreads4w)
-
-    if(EXISTS "${PThreads4W_DIR}")
-        # see c:/vcpkg/installed/x64-windows/share/pthread/vcpkg-cmake-wrapper.cmake
-
-        include(SelectLibraryConfigurations)
-
-        set(PThreads4W_INC_DIR ${PThreads4W_DIR})
-        set(PThreads4W_LIB_DIR ${PThreads4W_DIR})
-        set(PThreads4W_DLL_DIR ${PThreads4W_DIR})
-
-        find_path(PThreads4W_INCLUDE_DIR NAMES pthread.h
-            HINTS ${PThreads4W_INC_DIR} NO_DEFAULT_PATH)
-        find_library(PThreads4W_LIBRARY_RELEASE NAMES pthreadVC3
-            HINTS ${PThreads4W_LIB_DIR} NO_DEFAULT_PATH)
-        find_library(PThreads4W_LIBRARY_DEBUG NAMES pthreadVC3d
-            HINTS ${PThreads4W_LIB_DIR} NO_DEFAULT_PATH)
-
-        select_library_configurations(PThreads4W)
-        find_package_handle_standard_args(PThreads4W "Could not find pthreads; please build pthreads4w in 3rdparty/pthreads4w" PThreads4W_LIBRARY PThreads4W_INCLUDE_DIR)
-        mark_as_advanced(PThreads4W_INCLUDE_DIR PThreads4W_LIBRARY)
-
-        find_file(PThreads4W_LIBRARY_RELEASE_DLL NAMES pthreadVC3.dll PATHS ${PThreads4W_DLL_DIR})
-        find_file(PThreads4W_LIBRARY_DEBUG_DLL NAMES pthreadVC3d.dll PATHS ${PThreads4W_DLL_DIR})
-    else()
-        find_package(PTHREADS)
-        if(NOT PThreads4W_FOUND)
-            message("Could not find PThreads4W; please install pthreads with vcpkg or build it manually in ${PThreads4W_DIR}.")
-        endif()
-    endif()
+    find_package(PTHREADS)
     set(THREADS_FOUND ${PThreads4W_FOUND})
-    if(THREADS_FOUND)
-        set(THREADS_INCLUDE_DIR ${PThreads4W_INCLUDE_DIR})
-        set(THREADS_LIBRARY ${PThreads4W_LIBRARY})
-        set(THREADS_LIBRARY_RELEASE_DLL ${PThreads4W_LIBRARY_RELEASE_DLL})
-        set(THREADS_LIBRARY_DEBUG_DLL ${PThreads4W_LIBRARY_DEBUG_DLL})
-        message(STATUS "Found pthread library for windows")
-        message("THREADS_INCLUDE_DIR         : ${THREADS_INCLUDE_DIR}")
-        message("THREADS_LIBRARY             : ${THREADS_LIBRARY}")
-        message("THREADS_LIBRARY_RELEASE_DLL : ${THREADS_LIBRARY_RELEASE_DLL}")
-        message("THREADS_LIBRARY_DEBUG_DLL   : ${THREADS_LIBRARY_DEBUG_DLL}")
-    else()
-        message("Could not find pthread library for windows")
-    endif()
+    set(THREADS_INCLUDE_DIR ${PThreads4W_INCLUDE_DIR})
+    set(THREADS_LIBRARY ${PThreads4W_LIBRARY})
+    set(THREADS_LIBRARY_RELEASE_DLL ${PThreads4W_LIBRARY_RELEASE_DLL})
+    set(THREADS_LIBRARY_DEBUG_DLL ${PThreads4W_LIBRARY_DEBUG_DLL})
+    find_package_handle_standard_args(THREADS "Could not find PThreads4W" THREADS_LIBRARY THREADS_INCLUDE_DIR THREADS_LIBRARY_RELEASE_DLL THREADS_LIBRARY_DEBUG_DLL)
 else()
   find_package(Threads)
 endif()
 
-# JACK
+# Find Libraries
 
 find_package(JACK)
-
-# Python
-
+set(Python3_FIND_REGISTRY NEVER)
 find_package(Python3 COMPONENTS Interpreter Development)
-find_package(Python2 COMPONENTS Interpreter Development)
-find_package(Python REQUIRED COMPONENTS Interpreter)
-
-foreach(_pkg Python2 Python3)
-  if(NOT ${_pkg}_FOUND)
-    message(STATUS "Please check ${_pkg} enironment")
-    foreach(_key ROOT_DIR EXECUTABLE INCLUDE_DIR LIBRARY)
-      message("  ${_pkg}_${_key} is ${${_pkg}_${_key}}")
-    endforeach()
-  endif()
-endforeach()
-
-# Qt
-
-if(MSVC)
-    if(NOT DEFINED QTDIR)
-        if(DEFINED ENV{QTDIR})
-            set(QTDIR $ENV{QTDIR})
-        else()
-            # https://stackoverflow.com/questions/15639781/how-to-find-the-qt5-cmake-module-on-windows
-            GET_FILENAME_COMPONENT(QT_BIN [HKEY_CURRENT_USER\\Software\\Classes\\Applications\\QtProject.QtCreator.cpp\\shell\\Open\\Command] PATH)
-            STRING(REPLACE "/Tools" ";" QT_BIN "${QT_BIN}")
-            LIST(GET QT_BIN 0 QT_BIN)
-            FILE(GLOB QT_VERSIONS "${QT_BIN}/5.*")
-            LIST(SORT QT_VERSIONS)
-            LIST(REVERSE QT_VERSIONS)
-            LIST(GET QT_VERSIONS 0 QT_VERSION)
-            STRING(REPLACE "//" "/"  QT_VERSION "${QT_VERSION}")
-            IF(MSVC_VERSION LESS 1900)
-                SET(QT_MSVC 2013)
-            ELSEIF(MSVC_VERSION LESS 1910)
-                SET(QT_MSVC 2015)
-            ELSEIF(MSVC_VERSION LESS 1920)
-                SET(QT_MSVC 2017)
-            ELSE()
-                SET(QT_MSVC 2019)
-            ENDIF()
-            IF(CMAKE_SIZEOF_VOID_P EQUAL 8)
-                SET(QT_MSVC "${QT_MSVC}_64")
-            ENDIF()
-            SET(QTDIR_GUESS "${QT_VERSION}/msvc${QT_MSVC}")
-            find_path(QTDIR bin/qmake.exe PATHS ${QTDIR_GUESS} NO_DEFAULT_PATH)
-            message(STATUS "Found Qt5 Directory: ${QTDIR}")
-        endif()
-    endif()
-    set(CMAKE_PREFIX_PATH ${QTDIR} ${CMAKE_PREFIX_PATH})
-endif()
-
 find_package(Qt5Widgets)
-if(Qt5Widgets_FOUND)
-	message(STATUS "Found Qt5: ${Qt5Widgets_PRIVATE_INCLUDE_DIRS}")
-endif()
-
-# FFmpeg
-
 find_package(FFmpeg COMPONENTS AVCODEC AVFORMAT AVDEVICE AVUTIL SWSCALE SWRESAMPLE)
-if(FFMPEG_LIBRARIES AND FFMPEG_INCLUDE_DIRS)
-  set(FFMPEG_FOUND TRUE)
-endif()
-
-# OpenGL / GLUT / ALSA
-
 find_package(OpenGL)
-if(OPENGL_FOUND)
-	message(STATUS "OpenGL (Win32): ${OPENGL_LIBRARY} ${OPENGL_INCLUDE_DIR}")
-endif()
-
-# GLUT
-if(MSVC)
-  find_path(FreeGLUT_INCLUDE_DIR NAMES GL/freeglut.h)
-  find_library(FreeGLUT_LIBRARY freeglut)
-	find_package_handle_standard_args(FreeGLUT REQUIRED_VARS FreeGLUT_INCLUDE_DIR FreeGLUT_LIBRARY)
-	set(GLUT_INCLUDE_DIR ${FreeGLUT_INCLUDE_DIR})
-	set(GLUT_LIBRARY ${FreeGLUT_LIBRARY})
-	find_package_handle_standard_args(GLUT REQUIRED_VARS GLUT_INCLUDE_DIR GLUT_LIBRARY)
-else()
-	find_package(GLUT)
-endif()
-
+find_package(GLUT)
 find_package(ALSA)
 
 # Curses
@@ -236,12 +120,13 @@ else()
     find_path(_NCURSES_INCLUDE_DIR curses.h
         HINTS ${CURSES_INCLUDE_DIR}/ncurses NO_DEFAULT_PATH)
     if(_NCURSES_INCLUDE_DIR)
+        add_compile_options(-DNCURSES_STATIC)
         set(CURSES_INCLUDE_DIR ${_NCURSES_INCLUDE_DIR})
     endif()
   endif()
 endif()
 
-# modplug
+# ModPlug
 
 if(MSVC)
     find_path(MODPLUG_INCLUDE_DIRS NAMES modplug.h PATH_SUFFIXES libmodplug)
@@ -258,7 +143,7 @@ else()
     set(MATH_LIBRARY "m")
 endif()
 
-# getopt (MSVC)
+# GetOpt
 
 if(MSVC)
     find_path(GETOPT_INCLUDE_DIR NAMES getopt.h)
@@ -266,51 +151,18 @@ if(MSVC)
     find_package_handle_standard_args(GETOPT "Could not find getopt; please install getopt with vcpkg" GETOPT_LIBRARY GETOPT_INCLUDE_DIR)
 endif()
 
-# unbuffered
+# Unbuffered STDIO library for MinGW
 
 if(MINGW)
   add_library(unbuffered STATIC common/mingw_unbuffered.c)
   set(COMMON_LIBRARIES unbuffered)
 endif()
 
-# Visual Studio
-
-if(MSVC)
-    SET( CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG "${OUTPUT_DIRECTORY}")
-    SET( CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE "${OUTPUT_DIRECTORY}")
-    SET( CMAKE_LIBRARY_OUTPUT_DIRECTORY_DEBUG "${OUTPUT_DIRECTORY}")
-    SET( CMAKE_LIBRARY_OUTPUT_DIRECTORY_RELEASE "${OUTPUT_DIRECTORY}")
-    SET( CMAKE_ARCHIVE_OUTPUT_DIRECTORY_DEBUG "${OUTPUT_DIRECTORY}")
-    SET( CMAKE_ARCHIVE_OUTPUT_DIRECTORY_RELEASE "${OUTPUT_DIRECTORY}")
-endif()
-
-# Compiler options
-
-if (CMAKE_C_FLAGS STREQUAL "")
-  if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
-    set(CMAKE_C_FLAGS "-O3 -g")
-  endif()
-endif()
-
-if(MSVC)
-  add_compile_options(/W1)
-else()
-  add_compile_options(-Wall)
-  if("Ninja" STREQUAL ${CMAKE_GENERATOR})
-    add_compile_options (-fdiagnostics-color=always)
-  endif()
-endif()
-
 if(NOT DEFINED BUILD_TRACER)
   set(BUILD_TRACER "Y" CACHE BOOL "Build the image tracer (x86 only)" FORCE)
 endif()
 
-include_directories("common")
-include_directories(${JACK_INCLUDE_DIR})
-if(MSVC)
-  add_definitions(-DNOMINMAX)
-  add_definitions(-D_USE_MATH_DEFINES)
-endif()
+# Add subdirectory
 
 add_subdirectory (include)
 add_subdirectory (libol)
@@ -319,12 +171,67 @@ add_subdirectory (tools)
 add_subdirectory (python)
 add_subdirectory (examples)
 
-# install
+# Jack Over PulseAudio for WSL
 
-if(MSVC)
-install(
-    CODE "file(GLOB_RECURSE ALL_RUNTIME_DLL \"${CMAKE_CURRENT_BINARY_DIR}/*.dll\")"
-    CODE "file(INSTALL \${ALL_RUNTIME_DLL} DESTINATION \"${CMAKE_INSTALL_PREFIX}/bin\")")
+if (wsl)
+  include(ExternalProject)
+
+  set(jopa_DESTDIR ${CMAKE_CURRENT_BINARY_DIR}/jopa_install)
+
+  ExternalProject_Add(jopa
+    GIT_REPOSITORY https://github.com/m13253/jack-over-pulseaudio.git
+    GIT_TAG master  # 5d0514b
+    BUILD_IN_SOURCE TRUE
+    CONFIGURE_COMMAND ""
+    BUILD_COMMAND make
+    UPDATE_COMMAND ""
+    INSTALL_DIR ${CMAKE_CURRENT_BINARY_DIR}/install
+    INSTALL_COMMAND make DESTDIR=${jopa_DESTDIR} install
+  )
+  install(
+    DIRECTORY ${jopa_DESTDIR}/
+    DESTINATION "/"
+    USE_SOURCE_PERMISSIONS
+  )
 endif()
 
+# Install
+
 install(FILES ${CMAKE_CURRENT_LIST_DIR}/test_patterns/ILDA12K.ild DESTINATION ${CMAKE_INSTALL_PREFIX}/test_patterns)
+install(FILES openlase.cmd DESTINATION ${CMAKE_INSTALL_PREFIX}/bin)
+install(FILES openlase.sh DESTINATION ${CMAKE_INSTALL_PREFIX}/bin)
+install(DIRECTORY scripts DESTINATION ${CMAKE_INSTALL_PREFIX}/bin)
+install(DIRECTORY config DESTINATION ${CMAKE_INSTALL_PREFIX})
+install(FILES res/laser.ico DESTINATION ${CMAKE_INSTALL_PREFIX}/res)
+
+if (MSVC)
+
+  # Install DLLs
+
+  install(
+    CODE "file(GLOB_RECURSE ALL_RUNTIME_DLL \"${CMAKE_CURRENT_BINARY_DIR}/*.dll\")"
+    CODE "file(INSTALL \${ALL_RUNTIME_DLL} DESTINATION \"${CMAKE_INSTALL_PREFIX}/bin\")")
+
+  # Install start menu shortcut
+
+  set (cs_cmd powershell.exe)
+
+  # Install openlase terminal command
+  install(FILES openlase.cmd DESTINATION ${CMAKE_INSTALL_PREFIX}/bin)
+  set (cs_arg "../scripts/win/create-shortcut.ps1 'openlase.lnk' '\"${CMAKE_INSTALL_PREFIX}/bin/openlase.cmd\"' '${CMAKE_INSTALL_PREFIX}/res/laser.ico' '${CMAKE_INSTALL_PREFIX}/bin'")
+  install(CODE "execute_process(COMMAND ${cs_cmd} ${cs_arg})")
+
+  # Install openlase-dev terminal command
+  file(READ openlase-dev.cmd.in FILE_CONTENTS)
+  string(REPLACE "__OL_SOURCE_DIR__" "${CMAKE_SOURCE_DIR}" FILE_CONTENTS "${FILE_CONTENTS}")
+  file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/openlase-dev.cmd" ${FILE_CONTENTS})
+  install(FILES openlase-dev.cmd DESTINATION ${CMAKE_INSTALL_PREFIX}/bin)
+
+  set (cs_arg "../scripts/win/create-shortcut.ps1 'openlase-dev.lnk' '\"${CMAKE_INSTALL_PREFIX}/bin/openlase-dev.cmd\"' '${CMAKE_INSTALL_PREFIX}/res/laser.ico' '${CMAKE_INSTALL_PREFIX}/bin'")
+  install(CODE "execute_process(COMMAND ${cs_cmd} ${cs_arg})")
+
+  install(FILES tools/oldownload.ps1 DESTINATION ${CMAKE_INSTALL_PREFIX}/bin)
+  install(FILES tools/oldownload.py DESTINATION ${CMAKE_INSTALL_PREFIX}/bin)
+else()
+  install(FILES tools/oldownload DESTINATION ${CMAKE_INSTALL_PREFIX}/bin)
+endif()
