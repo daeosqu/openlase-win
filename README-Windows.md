@@ -62,22 +62,23 @@ Build and Installation instructions for OpenLase windows.
 - [Git for Windows](https://gitforwindows.org/)
 - [Scoop](https://scoop.sh/)
 
+# Install cmake, vcpkg, yasm
+
+インストールされていない場合は cmake, vcpkg, yasm, gsudo, ffmpeg をインストールします。 scoop がある場合は以下の様にしてインストール出来ます。
+
+```powershell
+scoop install cmake vcpkg yasm gsudo ffmpeg
+```
+
 git は自動改行変換をオフにしておきます。
 
 ```
 git config --global core.autocrlf false
 ```
 
-# Install cmake, vcpkg, yasm
-
-```powershell
-scoop install cmake vcpkg yasm gsudo ffmpeg
-```
-
 # Install python3
 
-Python3 をインストールします。
-または環境変数 OL_PYTHON_DIR に Python がインストールされているパスを指定します。
+Python3 をインストールします。または環境変数 OL_PYTHON_DIR に Python3.8 以降がインストールされているパスを指定します。
 
 ```powershell
 $TargetDir=$env:OL_PYTHON_DIR
@@ -91,7 +92,7 @@ Invoke-WebRequest "$py_url" -OutFile "$env:USERPROFILE\Downloads\python-${Target
 . $env:USERPROFILE\Downloads\python-${TargetVer}${Arch}.exe InstallAllUsers=0 TargetDir=$TargetDir AssociateFiles=0 CompileAll=0 PrependPath=0 Shortcuts=0 Include_doc=0 Include_debug=1 Include_dev=1 Include_exe=1 Include_launcher=0 InstallLauncherAllUsers=0 Include_lib=1 Include_pip=1 Include_symbols=1 Include_tcltk=1 Include_test=0 Include_tools=1 LauncherOnly=0 SimpleInstall=1
 ```
 
-cython をインストールします。
+Python パッケージをインストールします。ビルドには cython 以外は不要です。ただし cython のバージョンは 0.29.x 以下にしてください。
 
 ```powershell
 $env:OL_PYTHON_DIR\python -m ensurepip

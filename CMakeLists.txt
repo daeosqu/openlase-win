@@ -225,7 +225,7 @@ if (MSVC)
   file(READ openlase-dev.cmd.in FILE_CONTENTS)
   string(REPLACE "__OL_SOURCE_DIR__" "${CMAKE_SOURCE_DIR}" FILE_CONTENTS "${FILE_CONTENTS}")
   file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/openlase-dev.cmd" ${FILE_CONTENTS})
-  install(FILES openlase-dev.cmd DESTINATION ${CMAKE_INSTALL_PREFIX}/bin)
+  install(FILES "${CMAKE_CURRENT_BINARY_DIR}/openlase-dev.cmd" DESTINATION ${CMAKE_INSTALL_PREFIX}/bin)
 
   set (cs_arg "../scripts/win/create-shortcut.ps1 'openlase-dev.lnk' '\"${CMAKE_INSTALL_PREFIX}/bin/openlase-dev.cmd\"' '${CMAKE_INSTALL_PREFIX}/res/laser.ico' '${CMAKE_INSTALL_PREFIX}/bin'")
   install(CODE "execute_process(COMMAND ${cs_cmd} ${cs_arg})")

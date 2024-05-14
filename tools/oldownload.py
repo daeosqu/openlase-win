@@ -204,7 +204,6 @@ class MediaFile:
         return None
 
     def ensure_video(self):
-        self.ensure_cache()
         ifilepath = self.cache_path
         ofilepath = self.media_path
 
@@ -215,6 +214,8 @@ class MediaFile:
             vcodec = 'libx264'
 
         if not ofilepath.exists():
+            self.ensure_cache()
+
             print(f'{self.idstr}: convert: path={str(ifilepath)}')
             self.prepare()
 
@@ -351,7 +352,6 @@ def main(list_files, migrate, playvid, playvid2, qplayvid, command, force_conver
             if mf is not None:
                 if force_convert:
                     mf.delete()
-                mf.ensure_cache()
                 mf.ensure_video()
                 print(str(mf.media_path), file=original_stdout)
                 if command:
