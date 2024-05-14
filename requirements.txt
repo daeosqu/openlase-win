@@ -1,7 +1,9 @@
+cython==0.29.28
 click
 jaconv
 yt_dlp
 ffmpeg-python
 tinydb
 yt-dlp
-cython==0.29.28
+pillow
+opencv-contrib-python

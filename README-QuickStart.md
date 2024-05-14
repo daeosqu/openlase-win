@@ -107,6 +107,33 @@ Or use -p or --play option.
 oldownload -p "https://www.youtube.com/watch?v=a6-MraffDlE"
 ```
 
+# ugoira (うごイラ)
+
+1. PixivUtil2 の readme を読んでログイン可能である事を確認して下さい。
+1. 設定は以下のように変更します。
+
+```~/.local/pixivutil/config.ini
+[Network]
+useragent = Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:124.0) Gecko/20100101 Firefox/124.0
+
+[Settings]
+writeImageJSON = True
+writeImageInfo = True
+
+[Authentication]
+username = user_xxxx9999
+password = XXXXXXXXXXXXXXX
+cookie = 99999999_XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+```
+
+ugoira 形式のアニメーションのみ再生できます。
+再生可能なうごイラは以下のものがあります。
+
+- 49319675 まんぞくさんのフードファイト
+- 46671388 miku 深海少女
+
+https://www.pixiv.net/artworks/<ID> でブラウザで確認してください。
+
 # LaserCube
 
 実機 (LaserCube) で投影するには laserdock_jack.exe を使用します。
@@ -159,5 +186,6 @@ python "C:\Program Files\openlase\bin\simple.py"
 | showtext.py       | 文字列の描画出力。                                                                                 |
 | svg2ild.py        | .svg を .ild に変換する。                                                                          |
 | tweet.py          | Twitter (旧X) のツイートを描画出力(たぶん)。                                                       |
-| ugoira_player.py  | Pixiv のうごイラを描画出力(動作せず)。                                                             |
-| webcam_shadows.py | カメラの映像をリアルタイムで描画出力。           
+| ugoira_player.py  | 旧 Pixiv 用のうごイラを描画出力。                                                                  |
+| ugoira_player2.py | Pixiv のうごイラを描画出力。                                                                       |
+| webcam_shadows.py | カメラの映像をリアルタイムで描画出力。                                                             |

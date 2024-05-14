@@ -26,6 +26,7 @@ Build and Installation instructions for OpenLase windows.
   - cython 0.29.x
 - [laserdock_jack](https://github.com/daeosqu/laserdock_jack.git)
 - AutoHotkey
+- PixivUtil2 (OPTIONAL)
 
 # Install visual studio
 
@@ -137,6 +138,16 @@ cmake .. -G "Visual Studio 17 2022" -A x64 -DCMAKE_BUILD_TYPE=Release -DPython3_
 cmake --build . --target clean
 cmake --build .
 gsudo cmake --build . --config Release --target install
+```
+
+# Install PixivUtil2 (OPTIONAL)
+
+ugoira_player2 を使うには PixivUtil2 をインストールしておく必要があります。
+
+```
+Invoke-WebRequest -Uri "https://github.com/Nandaka/PixivUtil2/releases/download/v20230105/pixivutil202305.zip" -OutFile pixivutil202305.zip
+Expand-Archive pixivutil202305.zip -DestinationPath "$HOME/.local/pixivutil" -Force
+del pixivutil202305.zip
 ```
 
 # QuickStart
