@@ -1,4 +1,4 @@
-cython==0.29.28
+cython>=3
 click
 jaconv
 yt_dlp

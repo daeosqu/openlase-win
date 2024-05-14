@@ -1,18 +1,13 @@
-find_program(CYTHON3_EXECUTABLE cython3)
 find_program(CYTHON_EXECUTABLE cython)
 
-if (NOT CYTHON3_EXECUTABLE)
-    set(CYTHON3_EXECUTABLE ${CYTHON_EXECUTABLE})
-endif()
-
-if(NOT Python3_FOUND OR NOT Python3_LIBRARIES OR NOT CYTHON3_EXECUTABLE)
+if(NOT Python3_FOUND OR NOT Python3_LIBRARIES OR NOT CYTHON_EXECUTABLE)
   message(STATUS "Will NOT build python3 bindings (python libs or cython missing)")
 else()
   configure_file(${CMAKE_CURRENT_SOURCE_DIR}/config.pxi.in ${CMAKE_CURRENT_BINARY_DIR}/config.pxi)
 
   add_custom_command(OUTPUT pylase.c
     MAIN_DEPENDENCY pylase.pyx
-    COMMAND ${CYTHON3_EXECUTABLE} -I ${CMAKE_SOURCE_DIR}/include -I ${CMAKE_CURRENT_BINARY_DIR} -o pylase.c "${CMAKE_CURRENT_SOURCE_DIR}/pylase.pyx")
+    COMMAND ${CYTHON_EXECUTABLE} -I ${CMAKE_SOURCE_DIR}/include -I ${CMAKE_CURRENT_BINARY_DIR} -o pylase.c "${CMAKE_CURRENT_SOURCE_DIR}/pylase.pyx")
     list(APPEND ADDITIONAL_MAKE_CLEAN_FILES pylase.c)
 
   add_library(pylase3 MODULE pylase.c)

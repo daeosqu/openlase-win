@@ -26,10 +26,6 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include <stdio.h>
 #include <stdlib.h>
 
-#if defined(__MINGW32__) || defined(__MINGW64__) || defined(_MSC_VER)
-#define random rand
-#endif
-
 /* pong demo */
 
 #define TOP 0.25

@@ -17,10 +17,11 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
+#include "ol_compat.h"
+
 #include "libol.h"
 #include "ilda.h"
 #include "text.h"
-#include <math.h>
 #include <stdio.h>
 #include <stdint.h>
 #include <string.h>

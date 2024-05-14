@@ -1,8 +1,7 @@
+#include "ol_compat.h"
+
 #include <stdio.h>
 #include <errno.h>
-#ifdef __unix__
-#include <unistd.h>
-#endif
 #include <string.h>
 #include <stdlib.h>
 #include <jack/jack.h>
@@ -15,9 +14,6 @@
 #include "ilda.h"
 
 #include "trace.h"
-
-#define random rand
-#define srandom srand
 
 Font *font;
 

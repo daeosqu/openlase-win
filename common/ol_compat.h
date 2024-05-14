@@ -1,55 +1,54 @@
 /*
  * Compatibility header for openlase
+ *
+ * Usage:
+ *   gcc -DNOMINMAX -D_USE_MATH_DEFINE ...
+ *
+ * #include <stdint.h>
+ * #include <time.h>
+ * #include <math.h>
+ * #include <process.h>
+ * #include <windows.h>
+ * #include <unistd.h>
+ * #include <sys/param.h>
+ *
  */
 #ifndef __OL_COMPAT_H__
 #define __OL_COMPAT_H__
 
-//#define NOMINMAX
-//#define _USE_MATH_DEFINE
-
-/* Common definitions */
 #include <stdint.h>
 #define _STDINT_H
-
 #include <time.h>
+#include <math.h>
 
 #ifdef _MSC_VER
-/* for Visual C */
-
 #include <process.h>
 #include <windows.h>
-
-/*#define pid_t int*/
-# if defined __MINGW64__
-    typedef __int64 pid_t;
-# else
-    typedef int pid_t;
-#endif
-
-#define getpid _getpid
-/*#define random rand*/
-#define sleep_millis(n) Sleep(n)
-#define sleep(n) Sleep(n * 1000)
-
-#define NULL_DEVICE "nul"
-
 #else
-/* for POSIX-ly system */
-
-#if defined(__MINGW32__) || defined(__MINGW64__)
-#define random rand
-#endif
-
 #include <unistd.h>
 #include <sys/param.h>
+#endif
 
+#ifdef _MSC_VER
+#ifndef M_PI
+#define M_PI (3.14159265358979323846)
+#endif
+typedef int clockid_t;
+#define getpid _getpid
+#define sleep_millis(n) Sleep(n)
+#define sleep(n) Sleep(n * 1000)
+#else /* NOT _MSC_VER */
 #define sleep_millis(n) usleep(n * 1000)
+#endif
 
-#endif /* _MSC_VER */
+#if defined(_MSC_VER) || defined(__MINGW32__) || defined(__MINGW64__)
+#define random rand
+#define srandom srand
+#endif
 
 #ifndef MAX
 #define MAX(a, b) (((a) > (b)) ? (a) : (b))
 #define MIN(a, b) (((a) < (b)) ? (a) : (b))
 #endif
 
-#endif
+#endif /* __OL_COMPAT_H__ */

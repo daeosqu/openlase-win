@@ -40,19 +40,28 @@ else()
   set(wsl 0)
 endif()
 
+# for YASM
+
+if(CMAKE_SIZEOF_VOID_P EQUAL 8)
+    set(BITS 64)
+else()
+    set(BITS 32)
+endif()
+
 # Set compiler options
 
 include_directories("common")
 add_definitions(-DNOMINMAX)
-add_definitions(-D_USE_MATH_DEFINES)
+add_definitions(-D_USE_MATH_DEFINES)  # M_PI for gcc
 
 if(MSVC)
+  add_definitions(-D_USE_MATH_DEFINES)  # define M_PI for math.h
+  add_definitions(-DFREEGLUT_LIB_PRAGMAS=0)
   set(CMAKE_C_FLAGS "/W1")
   set(CMAKE_C_FLAGS_RELEASE "/MD /Ox /DNDEBUG")
   set(CMAKE_CXX_FLAGS_RELEASE ${CMAKE_C_FLAGS_RELEASE})
   set(CMAKE_CXX_FLAGS_RELEASE ${CMAKE_CXX_FLAGS_RELEASE})
   set(CMAKE_EXE_LINKER_FLAGS "/DYNAMICBASE:NO")
-  add_definitions(-DFREEGLUT_LIB_PRAGMAS=0)
   set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG "${OUTPUT_DIRECTORY}")
   set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE "${OUTPUT_DIRECTORY}")
   set(CMAKE_LIBRARY_OUTPUT_DIRECTORY_DEBUG "${OUTPUT_DIRECTORY}")
@@ -60,6 +69,7 @@ if(MSVC)
   set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY_DEBUG "${OUTPUT_DIRECTORY}")
   set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY_RELEASE "${OUTPUT_DIRECTORY}")
 else()
+  #add_compile_options("--std=c11")
   set(CMAKE_C_FLAGS_RELEASE "-O3")
   set(CMAKE_CXX_FLAGS_RELEASE "-O3")
   add_compile_options (-fdiagnostics-color=always)

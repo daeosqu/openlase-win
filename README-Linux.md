@@ -7,15 +7,15 @@ Ubuntu (WSL) でのビルド方法について解説します。
 ```
 cd $HOME
 git clone https://github.com/daeosqu/openlase-win.git
+echo 'OL_DEVEL=1' > .env
 ```
 
 # Build
 
 ```
 cd $HOME/openlase-win
-. openlace.sh
-mkdir -p build
-cd build
+. openlace-dev.sh
+python -m pip install -r requirements.txt
 olbuild
 olinstall
 ```
@@ -43,4 +43,32 @@ simulator を起動したときに以下のようなエラーが発生した場�
 
 ```
 freeglut (simulator): Unable to create OpenGL 1.0 context (flags 0, profile 0)
+```
+
+```
+LIBGL_ALWAYS_INDIRECT= simulator
+```
+
+または
+
+```
+unset LIBGL_ALWAYS_INDIRECT
+simulator
+```
+
+## jack-over-pulseaudio のビルド
+
+```
+sudo apt install libpulse-dev
+git clone https://github.com/m13253/jack-over-pulseaudio.git
+cd jack-over-pulseaudio
+make
+```
+
+## jopa の実行
+
+jopa を実行すると Jack Audio から PulseAudio にオーディオをバイパスする事ができます。
+
+```
+./jopa
 ```
