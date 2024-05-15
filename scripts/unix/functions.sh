@@ -86,7 +86,15 @@ function olbuild_mingw
 	${MINGW_PACKAGE_PREFIX}-ncurses \
 	${MINGW_PACKAGE_PREFIX}-qt5 \
 	${MINGW_PACKAGE_PREFIX}-fdk-aac \
-	${MINGW_PACKAGE_PREFIX}-libmodplug
+	${MINGW_PACKAGE_PREFIX}-libmodplug \
+	${MINGW_PACKAGE_PREFIX}-python \
+	${MINGW_PACKAGE_PREFIX}-python-click \
+	${MINGW_PACKAGE_PREFIX}-python-ffmpeg-python \
+	${MINGW_PACKAGE_PREFIX}-python-pillow \
+	${MINGW_PACKAGE_PREFIX}-python-opencv \
+
+    pip install --no-input jaconv yt-dlp tinydb
+
     cd "$OL_BUILD_DIR"
     PKG_CONFIG_PATH=/ucrt64/lib/ffmpeg4.4/pkgconfig:$PKG_CONFIG_PATH cmake .. -G 'Ninja' -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=${MINGW_PREFIX}/local/openlase
     ninja clean && ninja

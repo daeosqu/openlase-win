@@ -27,7 +27,7 @@ OLRenderParams params;
 
 float gbl_time = 0;
 int gbl_frames = 0;
-float ftime = 0;
+float float_time = 0;
 float audiotime;
 
 #define BPM 135
@@ -88,23 +88,23 @@ void HSBToRGB(
 
 float render(void)
 {
-	ftime = olRenderFrame(150);
+	float_time = olRenderFrame(150);
 	gbl_frames++;
-	gbl_time += ftime;
+	gbl_time += float_time;
 
 	audiotime = gbl_time * AB;
 
 	if ((gbl_frames % 200) == 0) {
-		printf("Frame time: %f, FPS:%f, Avg FPS:%f, Audio: %f\n", ftime, 1/ftime, gbl_frames/gbl_time, audiotime);
+		printf("Frame time: %f, FPS:%f, Avg FPS:%f, Audio: %f\n", float_time, 1/float_time, gbl_frames/gbl_time, audiotime);
 		fflush(stdout);
 	}
 
-	return ftime;
+	return float_time;
 }
 
 int passed(float time)
 {
-	return (((gbl_time - ftime) < time) && gbl_time >= time);
+	return (((gbl_time - float_time) < time) && gbl_time >= time);
 }
 
 int apassed(float time)
@@ -405,7 +405,7 @@ void DoMetaballs(float limit)
 		olSetVertexShader(NULL);
 
 		ctime += render();
-		xpos -= ftime*1.2;
+		xpos -= float_time*1.2;
 	}
 }
 
@@ -599,7 +599,7 @@ void DoEuskal(void)
 		olDrawIlda(ild);
 		render();
 
-		cur_draw += ftime * count / 5.0;
+		cur_draw += float_time * count / 5.0;
 
 		if (cur_draw > count) {
 			break;
@@ -623,7 +623,7 @@ void DoEuskal(void)
 
 		render();
 
-		bright -= ftime * 40.0;
+		bright -= float_time * 40.0;
 		if (bright < 0)
 			break;
 	}
@@ -659,7 +659,7 @@ void DoTitle(float limit)
 		olDrawIlda(ild);
 		ctime += render();
 
-		cur_draw += ftime * count / 3.0;
+		cur_draw += float_time * count / 3.0;
 
 		if (cur_draw > count) {
 			break;
@@ -689,7 +689,7 @@ void DoTitle(float limit)
 		olDrawString(font, s_x, s_y, s_h, C_WHITE, s);
 		olSetPixelShader(NULL);
 		ctime += render();
-		wipe_center += 1.7*ftime;
+		wipe_center += 1.7*float_time;
 
 		if(wipe_center > 1.0f)
 			break;
@@ -709,7 +709,7 @@ void DoTitle(float limit)
 		olPopColor();
 		render();
 
-		bright -= ftime * 130.0;
+		bright -= float_time * 130.0;
 		if (bright < 0)
 			bright = 0;
 	}
@@ -827,7 +827,7 @@ void DoStars(float limit)
 
 	}
 
-	ftime = 0;
+	float_time = 0;
 
 	int id = 0;
 
@@ -844,7 +844,7 @@ void DoStars(float limit)
 		render_stars();
 		ctime += render();
 		for (i=0; i<NUM_STARS; i++) {
-			stars[i][3] -= ftime*0.3;
+			stars[i][3] -= float_time*0.3;
 			if (stars[i][3] < 0)
 				stars[i][3] = 0;
 		}
@@ -877,8 +877,8 @@ void DoStars(float limit)
 	while (audiotime < limit) {
 		render_stars();
 		for (i=0; i<NUM_STARS; i++) {
-			stars[i][0] *= (1+speed*ftime);
-			stars[i][3] += speed*ftime;
+			stars[i][0] *= (1+speed*float_time);
+			stars[i][3] += speed*float_time;
 			if (stars[i][3] > 1.0)
 				stars[i][3] = 1.0;
 			if (stars[i][0] > 1.5 && audiotime < (limit-2.2*AB)) {
@@ -891,7 +891,7 @@ void DoStars(float limit)
 
 		ctime += render();
 		if (speed < 2) {
-			speed += 1.2f * ftime;
+			speed += 1.2f * float_time;
 			if (speed > 2)
 				speed = 2;
 		}
@@ -1014,8 +1014,8 @@ void DoTunnel(float limit)
 
 
 		ctime += render();
-		z += ftime*3.2;
-		rz += ftime*3.2;
+		z += float_time*3.2;
+		rz += float_time*3.2;
 
 	}
 }
@@ -1102,7 +1102,7 @@ int main (int argc, char *argv[])
 	olSetAudioCallback(gen_audio);
 
 	float time = 0;
-	float ftime;
+	float float_time;
 	int i,j;
 
 	int frames = 0;
@@ -1167,14 +1167,14 @@ int main (int argc, char *argv[])
 		olVertex(0,-1,C_WHITE);
 		olEnd();*/
 
-		ftime = olRenderFrame(150);
+		float_time = olRenderFrame(150);
 		frames++;
-		gbl_time += ftime;
-		xpos -= ftime;
-		cur_draw += ftime * count / 5.0;
+		gbl_time += float_time;
+		xpos -= float_time;
+		cur_draw += float_time * count / 5.0;
 		if (cur_draw > count)
 			cur_draw = count;
-		printf("Frame time: %f, FPS:%f\n", ftime, frames/time);
+		printf("Frame time: %f, FPS:%f\n", float_time, frames/time);
 	}
 
 #endif

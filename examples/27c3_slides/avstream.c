@@ -114,7 +114,7 @@ int audio_readsamples(AContext *ctx, float *lb, float *rb, int samples)
 #else
 			ctx->buffered_samples = swr_convert(ctx->resampler,
 				(uint8_t **)&ctx->oabuf, AVCODEC_MAX_AUDIO_FRAME_SIZE,
-				(uint8_t **)a_frame->data, input_samples);
+				(const uint8_t **)a_frame->data, input_samples);
 #endif
 
 			ctx->poabuf = ctx->oabuf;

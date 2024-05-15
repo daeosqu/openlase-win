@@ -30,16 +30,15 @@ git config --global core.autocrlf false
 ```
 cd
 git clone https://github.com/daeosqu/openlase-win.git
-echo 'OL_DEVEL=1' > .env
 ```
 
 ## Build and Install
 
 ```
+echo 'OL_DEVEL=1' > .env
 cd $HOME/openlase-win
-export OL_DEVEL=1
-. openlace-dev.sh
-python -m pip install -r requirements.txt
+. openlase-dev.sh
 olbuild
 olinstall
 ```
+

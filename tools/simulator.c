@@ -191,15 +191,10 @@ void draw_gl(void)
 	fno++;
 
 #if 1 /* SHOW_FPS */
-#if defined(__MINGW32__) || defined(__MINGW64__)
-#define TV_TIMEVAL timeval
-#define TV_GETTIMEOFDAY(a) gettimeofday(a, NULL)
-#define TV_DIFF(a, b) (a.tv_sec - b.tv_sec + (double)(a.tv_usec - b.tv_usec) / 1000000)
-#else
+
 #define TV_TIMEVAL timespec
 #define TV_GETTIMEOFDAY(a) timespec_get(a, TIME_UTC)
 #define TV_DIFF(a, b) (a.tv_sec - b.tv_sec + (double)(a.tv_nsec - b.tv_nsec) / 1000000000)
-#endif
 
     static struct TV_TIMEVAL last_time_short = { 0, 0 };
     static struct TV_TIMEVAL last_warned = { 0, 0 };
@@ -444,7 +439,7 @@ int main (int argc, char *argv[])
 	init_gl(640, 640);
 
 	if ((client = jack_client_open(jack_client_name, JackNullOption, &jack_status)) == 0) {
-		real_printf (stderr, "jack server not running?\n");
+		real_fprintf (stderr, "jack server not running?\n");
 		return 1;
 	}
 
@@ -460,7 +455,7 @@ int main (int argc, char *argv[])
 	in_b = jack_port_register (client, "in_b", JACK_DEFAULT_AUDIO_TYPE, JackPortIsInput, 0);
 
 	if (jack_activate (client)) {
-		real_printf (stderr, "cannot activate client");
+		real_fprintf (stderr, "cannot activate client");
 		return 1;
 	}
 

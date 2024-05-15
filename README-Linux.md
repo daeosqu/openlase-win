@@ -7,14 +7,15 @@ Ubuntu (WSL) でのビルド方法について解説します。
 ```
 cd $HOME
 git clone https://github.com/daeosqu/openlase-win.git
-echo 'OL_DEVEL=1' > .env
 ```
 
 # Build
 
 ```
+echo 'OL_DEVEL=1' > .env
+
 cd $HOME/openlase-win
-. openlace-dev.sh
+. openlase-dev.sh
 python -m pip install -r requirements.txt
 olbuild
 olinstall

@@ -4,6 +4,5 @@ jaconv
 yt_dlp
 ffmpeg-python
 tinydb
-yt-dlp
 pillow
 opencv-contrib-python

@@ -163,7 +163,7 @@ void moreaudio(float *lb, float *rb, int samples)
 #else
 			buffered_samples = swr_convert(resampler,
 				(uint8_t **)resampleOutput, AUDIO_BUF,
-				(uint8_t **)pAudioFrame->data, pAudioFrame->nb_samples);
+				(const uint8_t **)pAudioFrame->data, pAudioFrame->nb_samples);
 #endif
 			pAudioBuffer = resampleOutput[0];
 		}

@@ -167,7 +167,7 @@ size_t decode_audio(PlayerCtx *ctx, AVPacket *packet, int new_packet, int32_t se
 #else
 	int out_samples = swr_convert(ctx->a_resampler,
 		(uint8_t **)ctx->a_resample_output, AVCODEC_MAX_AUDIO_FRAME_SIZE,
-		(uint8_t**)ctx->a_frame->data, in_samples);
+		(const uint8_t**)ctx->a_frame->data, in_samples);
 #endif
 	pthread_mutex_lock(&ctx->a_buf_mutex);
 
