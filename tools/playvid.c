@@ -43,10 +43,8 @@ currently use the video luma alone and convert it to 1bpp monochrome. It really
 is a hack.
 */
 
-#include "ol_compat.h"
-
-#include "libol.h"
-#include "trace.h"
+#include "libol/libol.h"
+#include "libol/trace.h"
 
 #include <stdio.h>
 #include <errno.h>

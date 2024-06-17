@@ -1,7 +1,44 @@
 <!DOCTYPE patchbay>
 <patchbay name="openlase-netjack" version="0.9.6">
  <output-sockets>
+  <socket name="olnet-audio" type="jack-audio" client="olnet" exclusive="off">
+   <plug>from_slave_6</plug>
+   <plug>from_slave_7</plug>
+  </socket>
+  <socket name="olnet" type="jack-audio" client="olnet" exclusive="off">
+   <plug>from_slave_1</plug>
+   <plug>from_slave_2</plug>
+   <plug>from_slave_3</plug>
+   <plug>from_slave_4</plug>
+   <plug>from_slave_5</plug>
+  </socket>
+  <socket name="system" type="jack-audio" client="system" exclusive="off">
+   <plug>capture_1</plug>
+   <plug>capture_2</plug>
+  </socket>
+  <socket name="output" type="jack-audio" client="output" exclusive="on">
+   <plug>out_x</plug>
+   <plug>out_y</plug>
+   <plug>out_r</plug>
+   <plug>out_g</plug>
+   <plug>out_b</plug>
+   <plug>out_e</plug>
+  </socket>
+  <socket name="lasershark" type="jack-audio" client="lasershark" exclusive="on">
+   <plug>out_x</plug>
+   <plug>out_y</plug>
+   <plug>out_r</plug>
+   <plug>out_g</plug>
+   <plug>out_b</plug>
+  </socket>
   <socket name="libol-laser" type="jack-audio" client="libol" exclusive="off">
+   <plug>out_x</plug>
+   <plug>out_y</plug>
+   <plug>out_r</plug>
+   <plug>out_g</plug>
+   <plug>out_b</plug>
+  </socket>
+  <socket name="cal" type="jack-audio" client="cal" exclusive="off">
    <plug>out_x</plug>
    <plug>out_y</plug>
    <plug>out_r</plug>
@@ -12,8 +49,31 @@
    <plug>out_al</plug>
    <plug>out_ar</plug>
   </socket>
+  <socket name="playilda" type="jack-audio" client="playilda" exclusive="on">
+   <plug>out_x</plug>
+   <plug>out_y</plug>
+   <plug>out_z</plug>
+   <plug>out_r</plug>
+   <plug>out_g</plug>
+   <plug>out_b</plug>
+   <plug>out_w</plug>
+  </socket>
+  <socket name="circlescope" type="jack-audio" client="circlescope" exclusive="off">
+   <plug>out_x</plug>
+   <plug>out_y</plug>
+   <plug>out_w</plug>
+  </socket>
+  <socket name="scope" type="jack-audio" client="scope" exclusive="off">
+   <plug>out_x</plug>
+   <plug>out_y</plug>
+   <plug>out_w</plug>
+  </socket>
  </output-sockets>
  <input-sockets>
+  <socket name="JACK over PulseAudio" type="jack-audio" client="JACK over PulseAudio" exclusive="on">
+   <plug>playback_1</plug>
+   <plug>playback_2</plug>
+  </socket>
   <socket name="system-laser-net-out" type="jack-audio" client="system" exclusive="off">
    <plug>playback_1</plug>
    <plug>playback_2</plug>
@@ -25,11 +85,64 @@
    <plug>playback_6</plug>
    <plug>playback_7</plug>
   </socket>
+  <socket name="simulator" type="jack-audio" client="simulator" exclusive="on">
+   <plug>in_x</plug>
+   <plug>in_y</plug>
+   <plug>in_r</plug>
+   <plug>in_g</plug>
+   <plug>in_b</plug>
+  </socket>
+  <socket name="simulator-01" type="jack-audio" client="simulator-01" exclusive="on">
+   <plug>in_x</plug>
+   <plug>in_y</plug>
+   <plug>in_r</plug>
+   <plug>in_g</plug>
+   <plug>in_b</plug>
+  </socket>
+  <socket name="output" type="jack-audio" client="output" exclusive="on">
+   <plug>in_x</plug>
+   <plug>in_y</plug>
+   <plug>in_r</plug>
+   <plug>in_g</plug>
+   <plug>in_b</plug>
+  </socket>
+  <socket name="lasershark" type="jack-audio" client="lasershark" exclusive="on">
+   <plug>in_x</plug>
+   <plug>in_y</plug>
+   <plug>in_r</plug>
+   <plug>in_g</plug>
+   <plug>in_b</plug>
+  </socket>
+  <socket name="circlescope" type="jack-audio" client="circlescope" exclusive="on">
+   <plug>in_l</plug>
+   <plug>in_r</plug>
+  </socket>
+  <socket name="scope" type="jack-audio" client="scope" exclusive="on">
+   <plug>in_l</plug>
+   <plug>in_r</plug>
+  </socket>
  </input-sockets>
  <slots/>
  <cables>
+  <cable input="JACK over PulseAudio" type="jack-audio" output="olnet-audio"/>
+  <cable input="simulator" type="jack-audio" output="olnet"/>
+  <cable input="output" type="jack-audio" output="olnet"/>
+  <cable input="circlescope" type="jack-audio" output="system"/>
+  <cable input="scope" type="jack-audio" output="system"/>
+  <cable input="simulator-01" type="jack-audio" output="output"/>
+  <cable input="lasershark" type="jack-audio" output="output"/>
+  <cable input="simulator" type="jack-audio" output="libol-laser"/>
+  <cable input="output" type="jack-audio" output="libol-laser"/>
   <cable input="system-laser-net-out" type="jack-audio" output="libol-laser"/>
+  <cable input="simulator" type="jack-audio" output="cal"/>
+  <cable input="JACK over PulseAudio" type="jack-audio" output="libol-audio"/>
   <cable input="system-audio-net-out" type="jack-audio" output="libol-audio"/>
+  <cable input="simulator" type="jack-audio" output="playilda"/>
+  <cable input="output" type="jack-audio" output="playilda"/>
+  <cable input="simulator" type="jack-audio" output="circlescope"/>
+  <cable input="output" type="jack-audio" output="circlescope"/>
+  <cable input="simulator" type="jack-audio" output="scope"/>
+  <cable input="output" type="jack-audio" output="scope"/>
  </cables>
 </patchbay>
 

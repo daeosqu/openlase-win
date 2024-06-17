@@ -1,9 +1,22 @@
 # Register batch file to start menu
-# Usage: create-shortcut.ps1 LNK_NAME BAT_PATH ICON_PATH WORK_DIR
+# Usage: create-shortcut.ps1 LNK_PATH BATCHFILE ICON_PATH WORK_DIR
+
+#Set-PSDebug -Trace 1
+
+$batch_file = $Args[1] -replace '[/]', '\'
+$icon_location = $Args[2] -replace '[/]', '\'
+$working_directory = $Args[3] -replace '[/]', '\'
+
 $objShell = New-Object -ComObject ("WScript.Shell")
-$objShortCut = $objShell.CreateShortcut($env:APPDATA + "\Microsoft\Windows\Start Menu\Programs\" + $Args[0])
+$objShortCut = $objShell.CreateShortcut($Args[0])
 $objShortCut.TargetPath = "cmd.exe"
-$objShortCut.Arguments = "/c $($Args[1])"
-$objShortCut.IconLocation = $Args[2]
-$objShortCut.WorkingDirectory = $Args[3]
+$objShortCut.Arguments = "/c ""$batch_file"""
+$objShortCut.IconLocation = $icon_location
+$objShortCut.WorkingDirectory = $working_directory
 $objShortCut.Save()
+
+if ($?) {
+    exit 0
+} else {
+    exit 1
+}

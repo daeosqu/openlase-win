@@ -24,6 +24,16 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 extern "C" {
 #endif
 
+#define IM_BIBUF 0
+#define IM_BTBUF 1
+#define IM_SIBUF 2
+#define IM_STBUF 3
+#define IM_SXBUF 4 /* available when mode is canny */
+#define IM_SYBUF 5 /* available when mode is canny */
+#define IM_SMBUF 6 /* available when mode is canny */
+#define IM_GRAY 7
+#define IM_COLOR 8
+
 typedef struct PlayerCtx PlayerCtx;
 
 typedef struct {
@@ -49,6 +59,8 @@ typedef struct {
 	int overscan;
 
 	int volume;
+
+	int update_debug_images;
 } PlayerSettings;
 
 typedef struct {
@@ -76,6 +88,16 @@ void playvid_skip(PlayerCtx *ctx);
 void playvid_update_settings(PlayerCtx *ctx, PlayerSettings *settings);
 double playvid_get_duration(PlayerCtx *ctx);
 void playvid_seek(PlayerCtx *ctx, double pos);
+uint8_t* playvid_get_image(PlayerCtx *ctx, int index, int *width, int *height, int *stride, int *pix_fmt);
+
+int ol_err(const char* format, ...);
+int ol_warn(const char* format, ...);
+int ol_info(const char* format, ...);
+int ol_verbose(const char* format, ...);
+int ol_debug(const char* format, ...);
+int ol_debug2(const char* format, ...);
+
+extern int playvid_opt_verbose;
 
 #ifdef __cplusplus
 };

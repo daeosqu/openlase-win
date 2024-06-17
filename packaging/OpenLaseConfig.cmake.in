@@ -1,0 +1,11 @@
+set(_supported_components libol)
+
+foreach(_comp ${OpenLase_FIND_COMPONENTS})
+    if (NOT ";${_supported_components};" MATCHES _comp)
+        set(OpenLase_FOUND False)
+        set(OpenLase_NOT_FOUND_MESSAGE "Unsupported component: ${_comp}")
+    endif()
+    include("${CMAKE_CURRENT_LIST_DIR}/OpenLase${_comp}Targets.cmake")
+endforeach()
+
+set(OpenLase_FOUND YES)

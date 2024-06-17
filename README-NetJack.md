@@ -17,15 +17,19 @@ Windows と WSL 間で動作確認しました。ただし、再生に遅延が�
 
 次に WSL で IP アドレスを確認します。
 
-```
-$ cat /etc/resolv.conf
-nameserver 172.29.176.1
-```
-
 Jackd を起動します。
 
 ```
-jackd -d net -a 172.29.176.1 -n olnet -C 7 -P 7 &
+olstart_slave
+```
+
+または
+
+```
+WSL_IP=$(sed -ne 's,^\s*nameserver\s*\(.*\)$,\1,p' /etc/resolv.conf)
+jackd -d net -a $WSL_IP -n olnet -C 7 -P 7 &
+jack_wait -w
+run_qjackctl --active-patchbay "$OL_DIR/config/openlase-netjack.xml"
 ```
 
 QJackCtl を起動して Patchbay で config/openlase-netjack.xml をロードしてアクティブにします。
@@ -33,5 +37,7 @@ QJackCtl を起動して Patchbay で config/openlase-netjack.xml をロード�
 再生します。
 
 ```
-LD_LIBRARY_PATH=/usr/local/openlase/lib:$LD_LIBRARY_PATH /usr/local/openlase/bin/qplayvid /mnt/c/opt/el/data/bad_apple.mp4
+playvid /mnt/c/opt/el/data/bad_apple.mp4
 ```
+
+"$OL_DIR/config/openlase-netjack.xml"

@@ -1,8 +1,0 @@
-@echo off
-REM Run OpenLase-Win Terminal
-
-SET script_dir=__OL_SOURCE_DIR__
-
-$env:OL_DEVEL="1"
-
-wt.exe --title "OpenLase [DEV]" -- pwsh.exe -NoExit -Command "&{ . '%script_dir%\scripts\win\openlase_rc.ps1' -Verbose }"

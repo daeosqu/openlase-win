@@ -21,7 +21,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 
 static int inited = 0;
 
-#include "libol.h"
+#include "libol/libol.h"
 #include "avstream.h"
 
 #ifndef AVCODEC_MAX_AUDIO_FRAME_SIZE

@@ -13,11 +13,10 @@
  * #include <sys/param.h>
  *
  */
-#ifndef __OL_COMPAT_H__
-#define __OL_COMPAT_H__
+#ifndef LIBOL_LIBOL_COMPAT_H
+#define LIBOL_LIBOL_COMPAT_H
 
 #include <stdint.h>
-#define _STDINT_H
 #include <time.h>
 #include <math.h>
 
@@ -51,4 +50,4 @@ typedef int clockid_t;
 #define MIN(a, b) (((a) < (b)) ? (a) : (b))
 #endif
 
-#endif /* __OL_COMPAT_H__ */
+#endif /* LIBOL_LIBOL_COMPAT_H */

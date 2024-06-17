@@ -17,10 +17,15 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
-#ifndef ILD_H
-#define ILD_H
+#ifndef LIBOL_ILDA_H
+#define LIBOL_ILDA_H
 
-#include "libol_common.h"
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+#include "libol/libol_export.h"
+#include "libol/libol_compat.h"
 
 #if __GNUC__
 #define _ATTRIBUTE_PACKED __attribute__((packed))
@@ -102,9 +107,13 @@ typedef struct {
 	IldaPoint *points;
 } IldaFile;
 
-OL_EXPORT IldaFile *olLoadIlda(const char *filename);
-OL_EXPORT void olDrawIlda(IldaFile *ild);
-OL_EXPORT void olDrawIlda3D(IldaFile *ild);
-OL_EXPORT void olFreeIlda(IldaFile *ild);
+LIBOL_EXPORT IldaFile *olLoadIlda(const char *filename);
+LIBOL_EXPORT void olDrawIlda(IldaFile *ild);
+LIBOL_EXPORT void olDrawIlda3D(IldaFile *ild);
+LIBOL_EXPORT void olFreeIlda(IldaFile *ild);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

@@ -17,9 +17,11 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
-#include "libol.h"
-#include "ilda.h"
-#include "text.h"
+#include "libol/libol.h"
+#include "libol/ilda.h"
+#include "libol/text.h"
+#include "libol/trace.h"
+
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -27,7 +29,6 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 
 #include "avstream.h"
 #include "video.h"
-#include "trace.h"
 
 /* This is a slide version of playvid.c, using avstream.c. */
 

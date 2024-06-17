@@ -2,24 +2,20 @@
 
 ;; Author: Daisuke Arai
 
-;DllCall("AllocConsole")
-
-SetBatchLines, -1
 #NoEnv
 #Warn
 #SingleInstance ignore
 
-#Include %A_ScriptDir%\functions.ahk
+SetBatchLines, -1
 
-Arguments := ""
-for Key, Value in A_Args
-  Arguments .= Value . " "
+#Include %A_ScriptDir%\common.ahk
+;;DEBUG := True
 
-RunSimulator(Arguments, "", True, False)
+activate := True
+hide_consle := True
 
-; WinActivate, ahk_id %old_hwnd%
-; WinWaitActive, ahk_id %old_hwnd%
-; ExitApp
+RunSimulator(Arguments, "", activate, hide_consle)
+Restore()
 
 ; Local Variables:
 ; coding: utf-8-with-signature-dos

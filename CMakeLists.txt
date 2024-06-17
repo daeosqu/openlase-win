@@ -16,15 +16,50 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #
 
-cmake_minimum_required(VERSION 3.12)
+cmake_minimum_required(VERSION 3.13)
 
+set(PROJECT_NAME "OpenLase")
+string(TOLOWER "${PROJECT_NAME}" PROJECT_NAME_LOWER)
+
+file(READ "${CMAKE_SOURCE_DIR}/VERSION" OPENLASE_VERSION)
+string(REGEX MATCH "([0-9.]+)" _ ${OPENLASE_VERSION})
+set(OPENLASE_VERSION "${CMAKE_MATCH_1}")
+
+project(${PROJECT_NAME} LANGUAGES C CXX VERSION "${OPENLASE_VERSION}")
+
+############################
+##  Modules and scripts   ##
+############################
+
+# Standard CMake modules
+
+include(GNUInstallDirs)
+include(CheckIncludeFile)
+include(CheckSymbolExists)
+include(CMakeDependentOption)
+include(CMakePackageConfigHelpers)
+include(GenerateExportHeader)
 include(FindPackageHandleStandardArgs)
 
-project(openlase)
+###############
+##  OPTIONS  ##
+###############
 
+option(OpenLase_INCLUDE_PACKAGING "Include packaging rules for libol" YES)
+set_property(GLOBAL PROPERTY USE_FOLDERS ON)
+set(CMAKE_CXX_VISIBILITY_PRESET hidden)
+set(CMAKE_VISIBILITY_INLINES_HIDDEN 1)
+set(Python3_FIND_REGISTRY NEVER)
+
+################
+##  SETTINGS  ##
+################
+
+set(LIBOL_COMPONENT_NAME "libol")
+set(INSTALL_CMAKEDIR "${CMAKE_INSTALL_LIBDIR}/cmake")
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/Modules/")
 
-include(CheckSymbolExists)
+set(LibOL_INSTALL_CMAKEDIR "${INSTALL_CMAKEDIR}")
 
 if (UNIX)
   if(CMAKE_HOST_SYSTEM_VERSION MATCHES "microsoft-standard-WSL2$")
@@ -40,17 +75,9 @@ else()
   set(wsl 0)
 endif()
 
-# for YASM
-
-if(CMAKE_SIZEOF_VOID_P EQUAL 8)
-    set(BITS 64)
-else()
-    set(BITS 32)
-endif()
-
 # Set compiler options
 
-include_directories("common")
+#include_directories("common")
 add_definitions(-DNOMINMAX)
 add_definitions(-D_USE_MATH_DEFINES)  # M_PI for gcc
 
@@ -80,7 +107,7 @@ endif()
 if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
   if(NOT MSVC)
     set(_DEFAULT_PREFIX)
-    if(MINGW AND ENV{MINGW_PREFIX})
+    if(MINGW AND "$ENV{MINGW_PREFIX}")
       set(_DEFAULT_PREFIX $ENV{MINGW_PREFIX}/local/openlase)
     else()
       set(_DEFAULT_PREFIX /usr/local/openlase)
@@ -93,30 +120,35 @@ if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
   endif()
 endif()
 
-# Find Thread library
+################
+##  Packages  ##
+################
+
+# Find Libraries
+
+find_package(ALSA)
+find_package(JACK)
+find_package(GLUT)
+find_package(OpenGL)
+find_package(Qt5 COMPONENTS Widgets)
+find_package(Python3 COMPONENTS Interpreter Development)
+find_package(FFmpeg COMPONENTS avcodec avformat avdevice avutil swscale swresample)
+
+# Threads
 
 if(MSVC)
-    find_package(PTHREADS)
-    set(THREADS_FOUND ${PThreads4W_FOUND})
+  find_package(PThreads)
+  if (PThreads4W_FOUND)
+    set(THREADS_FOUND YES)
     set(THREADS_INCLUDE_DIR ${PThreads4W_INCLUDE_DIR})
     set(THREADS_LIBRARY ${PThreads4W_LIBRARY})
     set(THREADS_LIBRARY_RELEASE_DLL ${PThreads4W_LIBRARY_RELEASE_DLL})
     set(THREADS_LIBRARY_DEBUG_DLL ${PThreads4W_LIBRARY_DEBUG_DLL})
-    find_package_handle_standard_args(THREADS "Could not find PThreads4W" THREADS_LIBRARY THREADS_INCLUDE_DIR THREADS_LIBRARY_RELEASE_DLL THREADS_LIBRARY_DEBUG_DLL)
+    add_library(Threads::Threads ALIAS PThreads4W::PThreads4W)
+  endif()
 else()
   find_package(Threads)
 endif()
-
-# Find Libraries
-
-find_package(JACK)
-set(Python3_FIND_REGISTRY NEVER)
-find_package(Python3 COMPONENTS Interpreter Development)
-find_package(Qt5Widgets)
-find_package(FFmpeg COMPONENTS AVCODEC AVFORMAT AVDEVICE AVUTIL SWSCALE SWRESAMPLE)
-find_package(OpenGL)
-find_package(GLUT)
-find_package(ALSA)
 
 # Curses
 
@@ -128,10 +160,10 @@ else()
   find_package(Curses)
   if(MINGW)
     find_path(_NCURSES_INCLUDE_DIR curses.h
-        HINTS ${CURSES_INCLUDE_DIR}/ncurses NO_DEFAULT_PATH)
+      HINTS ${CURSES_INCLUDE_DIR}/ncurses NO_DEFAULT_PATH)
     if(_NCURSES_INCLUDE_DIR)
-        add_compile_options(-DNCURSES_STATIC)
-        set(CURSES_INCLUDE_DIR ${_NCURSES_INCLUDE_DIR})
+      add_compile_options(-DNCURSES_STATIC)
+      set(CURSES_INCLUDE_DIR ${_NCURSES_INCLUDE_DIR})
     endif()
   endif()
 endif()
@@ -139,26 +171,18 @@ endif()
 # ModPlug
 
 if(MSVC)
-    find_path(MODPLUG_INCLUDE_DIRS NAMES modplug.h PATH_SUFFIXES libmodplug)
-    find_library(MODPLUG_LIBRARIES modplug)
-    find_package_handle_standard_args(MODPLUG "Could not find libmodplug; please install libmodplug with vcpkg" MODPLUG_LIBRARIES MODPLUG_INCLUDE_DIRS)
+  find_path(MODPLUG_INCLUDE_DIRS NAMES modplug.h PATH_SUFFIXES libmodplug)
+  find_library(MODPLUG_LIBRARIES modplug)
+  find_package_handle_standard_args(MODPLUG "Could not find libmodplug; please install libmodplug with vcpkg" MODPLUG_LIBRARIES MODPLUG_INCLUDE_DIRS)
 else()
-    find_package(PkgConfig)
-    pkg_check_modules(MODPLUG libmodplug)
-    if(MODPLUG_FOUND)
-      set(MODPLUG_INCLUDE_DIRS ${MODPLUG_INCLUDEDIR}/libmodplug)
-      set(MODPLUG_LIBRARY_DIRS ${MODPLUG_LIBDIR})
-    endif()
-    find_package_handle_standard_args(MODPLUG "Could not find libmodplug; please install libmodplug" MODPLUG_INCLUDE_DIRS MODPLUG_LIBRARY_DIRS MODPLUG_LIBRARIES)
-    set(MATH_LIBRARY "m")
-endif()
-
-# GetOpt
-
-if(MSVC)
-    find_path(GETOPT_INCLUDE_DIR NAMES getopt.h)
-    find_library(GETOPT_LIBRARY getopt)
-    find_package_handle_standard_args(GETOPT "Could not find getopt; please install getopt with vcpkg" GETOPT_LIBRARY GETOPT_INCLUDE_DIR)
+  find_package(PkgConfig)
+  pkg_check_modules(MODPLUG libmodplug)
+  if(MODPLUG_FOUND)
+    set(MODPLUG_INCLUDE_DIRS ${MODPLUG_INCLUDEDIR}/libmodplug)
+    set(MODPLUG_LIBRARY_DIRS ${MODPLUG_LIBDIR})
+  endif()
+  find_package_handle_standard_args(MODPLUG "Could not find libmodplug; please install libmodplug" MODPLUG_INCLUDE_DIRS MODPLUG_LIBRARY_DIRS MODPLUG_LIBRARIES)
+  set(MATH_LIBRARY "m")
 endif()
 
 # Unbuffered STDIO library for MinGW
@@ -168,20 +192,30 @@ if(MINGW)
   set(COMMON_LIBRARIES unbuffered)
 endif()
 
+# GetOpt for windows
+
+if(MSVC)
+  find_path(GETOPT_INCLUDE_DIR NAMES getopt.h)
+  find_library(GETOPT_LIBRARY getopt)
+  find_package_handle_standard_args(GETOPT "Could not find getopt; please install getopt with vcpkg" GETOPT_LIBRARY GETOPT_INCLUDE_DIR)
+endif()
+
+# Options
+
 if(NOT DEFINED BUILD_TRACER)
+  # Should be "Y" or not
   set(BUILD_TRACER "Y" CACHE BOOL "Build the image tracer (x86 only)" FORCE)
 endif()
 
 # Add subdirectory
 
-add_subdirectory (include)
 add_subdirectory (libol)
 add_subdirectory (output)
 add_subdirectory (tools)
 add_subdirectory (python)
 add_subdirectory (examples)
 
-# Jack Over PulseAudio for WSL
+# JOPA (Jack Over PulseAudio) for WSL only
 
 if (wsl)
   include(ExternalProject)
@@ -198,50 +232,13 @@ if (wsl)
     INSTALL_DIR ${CMAKE_CURRENT_BINARY_DIR}/install
     INSTALL_COMMAND make DESTDIR=${jopa_DESTDIR} install
   )
-  install(
-    DIRECTORY ${jopa_DESTDIR}/
-    DESTINATION "/"
-    USE_SOURCE_PERMISSIONS
-  )
-endif()
-
-# Install
-
-install(FILES ${CMAKE_CURRENT_LIST_DIR}/test_patterns/ILDA12K.ild DESTINATION ${CMAKE_INSTALL_PREFIX}/test_patterns)
-install(FILES openlase.cmd DESTINATION ${CMAKE_INSTALL_PREFIX}/bin)
-install(FILES openlase.sh DESTINATION ${CMAKE_INSTALL_PREFIX}/bin)
-install(DIRECTORY scripts DESTINATION ${CMAKE_INSTALL_PREFIX}/bin)
-install(DIRECTORY config DESTINATION ${CMAKE_INSTALL_PREFIX})
-install(FILES res/laser.ico DESTINATION ${CMAKE_INSTALL_PREFIX}/res)
-
-if (MSVC)
-
-  # Install DLLs
 
   install(
-    CODE "file(GLOB_RECURSE ALL_RUNTIME_DLL \"${CMAKE_CURRENT_BINARY_DIR}/*.dll\")"
-    CODE "file(INSTALL \${ALL_RUNTIME_DLL} DESTINATION \"${CMAKE_INSTALL_PREFIX}/bin\")")
-
-  # Install start menu shortcut
-
-  set (cs_cmd powershell.exe)
-
-  # Install openlase terminal command
-  install(FILES openlase.cmd DESTINATION ${CMAKE_INSTALL_PREFIX}/bin)
-  set (cs_arg "../scripts/win/create-shortcut.ps1 'openlase.lnk' '\"${CMAKE_INSTALL_PREFIX}/bin/openlase.cmd\"' '${CMAKE_INSTALL_PREFIX}/res/laser.ico' '${CMAKE_INSTALL_PREFIX}/bin'")
-  install(CODE "execute_process(COMMAND ${cs_cmd} ${cs_arg})")
-
-  # Install openlase-dev terminal command
-  file(READ openlase-dev.cmd.in FILE_CONTENTS)
-  string(REPLACE "__OL_SOURCE_DIR__" "${CMAKE_SOURCE_DIR}" FILE_CONTENTS "${FILE_CONTENTS}")
-  file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/openlase-dev.cmd" ${FILE_CONTENTS})
-  install(FILES "${CMAKE_CURRENT_BINARY_DIR}/openlase-dev.cmd" DESTINATION ${CMAKE_INSTALL_PREFIX}/bin)
-
-  set (cs_arg "../scripts/win/create-shortcut.ps1 'openlase-dev.lnk' '\"${CMAKE_INSTALL_PREFIX}/bin/openlase-dev.cmd\"' '${CMAKE_INSTALL_PREFIX}/res/laser.ico' '${CMAKE_INSTALL_PREFIX}/bin'")
-  install(CODE "execute_process(COMMAND ${cs_cmd} ${cs_arg})")
-
-  install(FILES tools/oldownload.ps1 DESTINATION ${CMAKE_INSTALL_PREFIX}/bin)
-  install(FILES tools/oldownload.py DESTINATION ${CMAKE_INSTALL_PREFIX}/bin)
-else()
-  install(FILES tools/oldownload DESTINATION ${CMAKE_INSTALL_PREFIX}/bin)
+    FILES ${jopa_DESTDIR}/usr/local/bin/jopa
+    DESTINATION "bin"
+    PERMISSIONS OWNER_EXECUTE OWNER_WRITE OWNER_READ GROUP_EXECUTE GROUP_READ COMPONENT Applications)
 endif()
+
+# Packaging
+
+add_subdirectory(packaging)

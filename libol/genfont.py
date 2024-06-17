@@ -1,4 +1,4 @@
-#!python3
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
 import os, sys, math
@@ -359,7 +359,7 @@ max_h = 0
 
 output = ""
 
-output += "#include \"text.h\"\n"
+output += "#include \"libol/text.h\"\n"
 
 overlap = 0
 

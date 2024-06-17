@@ -19,7 +19,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 
 #define _BSD_SOURCE
 
-#include "ol_compat.h"
+#include "libol/libol_compat.h"
 
 #include <stdio.h>
 #include <errno.h>

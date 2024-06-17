@@ -1,6 +1,6 @@
-﻿;; raise.ahk
+﻿;; functions.ahk
 
-;; Raise window
+;; QJackCtl and OpenLase application control library
 
 ;; Author: Daisuke Arai
 
@@ -21,6 +21,9 @@ CoordMode, Caret, Window
 CoordMode, Menu, Window
 
 DEBUG := 0
+wait_invoke := 8.0
+wait_exists := 4.0
+wait_console := 4.0
 
 
 old_hwnd := WinExist("A")
@@ -51,25 +54,31 @@ RunQjackCtl(arguments="", runparams="", activate=True)
 {
   cmd_name = "qjackctl.exe"
   cmd := cmd_name . " " . arguments
-  hwnd := ActivateOrStartProgram("^JACK Audio Connection Kit .* - QjackCtl$", cmd, activate, runparams, "\\qjackctl.exe$", False, False)
+  hwnd := ActivateOrStartProgram("^JACK Audio Connection Kit .* - QjackCtl$", cmd, activate, runparams, "", False, False)
   Return, hwnd
 }
 
-;;; 関数
+;;; Function
 
 ActivateOrStartProgram(windowTitle, programName, activate=False, options="", console_title="", minimize_console=True, hide_console=False)
 {
+  global wait_invoke, wait_exists, wait_console
   hwnd := WinExist(windowTitle)
   If !hwnd
   {
     StartProgram(programName, options)
-    hwnd := ActivateWindow(windowTitle, 4.0)
+    wait_window := wait_invoke
   } else if activate {
-    hwnd := ActivateWindow(windowTitle, 2.0)
+    wait_window := wait_exists
   }
-  If console_title
+  If (activate)
   {
-    WinWait, %console_title% ahk_group ConsoleWindowGroup, , 2.0
+    hwnd := ActivateWindow(windowTitle, wait_window)
+  }
+  If (console_title AND (hide_console OR minimize_console))
+  {
+    P("Waiting console: console_title=" console_title)
+    WinWait, %console_title% ahk_group ConsoleWindowGroup, , wait_console
     If hide_console
     {
       WinHide, %console_title% ahk_group ConsoleWindowGroup
@@ -88,7 +97,9 @@ StartProgram(programName, options="")
   Run, %programName%, , UseErrorLevel %options%
   If (ErrorLevel == "ERROR" || ErrorLevel <> 0)
   {
-    Abort("プログラムを起動できません: " programName)
+    Abort("Can not start program: " programName)
+  } Else {
+    P("started")
   }
 }
 
@@ -97,7 +108,7 @@ ActivateWindow(windowName, timeout=2.0)
   hwnd := _ActivateWindow(windowName, timeout)
   If (NOT hwnd > 0)
   {
-    Abort("ウィンドウをアクティブ化できませんでした: " windowName)
+    Abort("Can not activate window: " windowName)
   }
   Return, hwnd
 }
@@ -107,26 +118,31 @@ _ActivateWindow(windowName, timeout=2.0)
   If (windowName == "") {
     Abort("ILLEGAL_ARGUMENT: ActivateWindow: windowName is empty")
   }
+  P("WinWait...")
   WinWait, %windowName%, , %timeout%
   If ErrorLevel <> 0
   {
     P("_ActivateWindow: Can not find window: " windowName)
     Return, -1
   }
+  P("WinWait...done")
   hwnd := WinExist(windowName)
   If (NOT hwnd > 0)
   {
     P("_ActivateWindow: Can not get window handle: " windowName)
     Return, -1
   }
+  P("Activating Window...")
   While (timeout > 0) {
     WinActivate, ahk_id %hwnd%
     WinWaitActive, ahk_id %hwnd%, , 1
     If (ErrorLevel == 0)
     {
+      P("Activating Window...done")
       Return, hwnd
     }
     timeout -= 1.0
+    P("Activating Window...retry")
   }
   Return, -1
 }

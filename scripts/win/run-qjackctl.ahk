@@ -2,20 +2,22 @@
 
 ;; Author: Daisuke Arai
 
-SetBatchLines, -1
-
 #NoEnv
 #Warn
 #SingleInstance ignore
+SetBatchLines, -1
 
-;DllCall("AllocConsole")
+#Include %A_ScriptDir%\common.ahk
+;;DEBUG := True
 
-#Include %A_ScriptDir%\functions.ahk
+wait_invoke := 30.0
+wait_exists := 5.0
 
 CloseSubWindows()
 {
   start := A_TickCount
-  last_close := A_TickCount
+  last_close := 0
+  P("CloseSubWindows...")
   Loop, 1000
   {
     If (A_TickCount > start + 10000)
@@ -23,7 +25,8 @@ CloseSubWindows()
       P("Time out for closing all sub windows for qjackctl")
       Return
     }
-    hwnd := WinExist("^(Patchbay|Messages / Status|Graph|Session)\ -\ QjackCtl$ ahk_exe qjackctl.exe")
+;;    hwnd := WinExist("^(Patchbay|Messages / Status|Graph|Session)\ -\ QjackCtl$ ahk_exe qjackctl.exe")
+    hwnd := WinExist("^(Patchbay|Messages / Status|Session)\ -\ QjackCtl$ ahk_exe qjackctl.exe")
     If hwnd
     {
       P("Found " hwnd)
@@ -31,28 +34,25 @@ CloseSubWindows()
       WinWaitActive, ahk_id %hwnd%
       Send, !{F4}
       last_close := A_TickCount
-    } Else If (A_TickCount > start + 500 && A_TickCount > last_close + 500) {
-      P("No more sub windows")
-      Return
     } Else {
-      P("Try finding sub windows...")
+      If (last_close) {
+        If (A_TickCount > last_close + 1000) {
+          P("No more sub windows")
+          Return
+        }
+      } Else If (A_TickCount > start + 5000) {
+        P("Timed out!")
+        Return
+      }
     }
     Sleep, 100
   }
+  P("Looping!")
 }
-
-Arguments := ""
-for Key, Value in A_Args
-  Arguments .= Value . " "
 
 RunQjackCtl(Arguments)
 CloseSubWindows()
-
-Sleep, 3000
-
-; WinActivate, ahk_id %old_hwnd%
-; WinWaitActive, ahk_id %old_hwnd%
-; ExitApp
+Restore()
 
 ; Local Variables:
 ; coding: utf-8-with-signature-dos

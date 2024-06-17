@@ -1,4 +1,7 @@
-#include "ol_compat.h"
+#include "libol/libol.h"
+#include "libol/text.h"
+#include "libol/ilda.h"
+#include "trace.h"
 
 #include <stdio.h>
 #include <errno.h>
@@ -8,12 +11,6 @@
 #include <math.h>
 
 #include <modplug.h>
-
-#include "libol.h"
-#include "text.h"
-#include "ilda.h"
-
-#include "trace.h"
 
 Font *font;
 

@@ -25,8 +25,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  * course use any other files, though for the tracer you'll likely have to
  * tweak the vparms depending on its complexity. */
 
-#include "ol_compat.h"
-#include "libol.h"
+#include "libol/libol.h"
 
 #include <stdio.h>
 #include <errno.h>

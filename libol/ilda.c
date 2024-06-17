@@ -17,9 +17,8 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
-#include "ol_compat.h"
-#include "libol.h"
-#include "ilda.h"
+#include "libol/libol.h"
+#include "libol/ilda.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -41,7 +40,6 @@ static inline uint16_t swapshort(uint16_t v) {
 #endif
 
 #include <stdint.h>
-#include "ilda.h"
 
 
 IldaFile *olLoadIlda(const char *filename)

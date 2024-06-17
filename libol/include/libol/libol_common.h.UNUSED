@@ -4,6 +4,8 @@
 #include <stdint.h>
 #define _STDINT_H
 
+#include <OpenLase/ol_compat.h>
+
 #ifdef _MSC_VER
 #ifdef BUILD_LIBOL_DLL
 #define OL_EXPORT __declspec(dllexport)
