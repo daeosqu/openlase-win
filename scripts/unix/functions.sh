@@ -1,7 +1,5 @@
 # function ahk() { AutoHotkeyU64.exe "$@"; }
 
-IS_WSL=${WSL_DISTRO_NAME+1}
-
 function run_qjackctl
 {
     qjackctl &
@@ -32,23 +30,25 @@ function olstart
     run_qjackctl
     jack_wait -w
     run_simulator
-    if [ -n "$IS_WSL" ]; then
+    if [ -n "${WSL_DISTRO_NAME+1}" ]; then
 	run_jopa
     fi
 }
 
 function olstart_slave
 {
-    run_jackd_dummy
+    if [ -n "${WSL_DISTRO_NAME+1}" ]; then
+	WSL_IP=$(sed -ne 's,^\s*nameserver\s*\(.*\)$,\1,p' /etc/resolv.conf)
+	jackd -d net -a $WSL_IP -n olnet -C 7 -P 7 &
+    fi
     jack_wait -w
     run_qjackctl --active-patchbay "$OL_DIR/config/openlase-netjack.xml"
-    run_simulator
 }
 
 function olstop
 {
     killall simulator
-    if [ -n "$IS_WSL" ]; then
+    if [ -n "${WSL_DISTRO_NAME+1}" ]; then
 	killall jopa
     fi
     killall -9 qjackctl

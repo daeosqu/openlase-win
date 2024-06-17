@@ -29,11 +29,24 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include <QStatusBar>
 #include <QFile>
 #include <QTextStream>
+#include <QTimer>
+#include <QFileInfo>
+#include <QDir>
+
+#include <libavutil/pixfmt.h>
+#include <libavutil/frame.h>
+#include <getopt.h>
 
 #include "qplayvid_gui.h"
 
 #define Setting(name, ...) \
 	addSetting(new PlayerSetting(this, #name, settings.name, __VA_ARGS__))
+
+int opt_auto_play = 0;
+int opt_auto_quit = 0;
+int opt_debug = 0;
+
+#define QS(s) s.toStdString().c_str()
 
 PlayerUI::PlayerUI(QWidget *parent)
 	: QMainWindow(parent)
@@ -43,7 +56,7 @@ PlayerUI::PlayerUI(QWidget *parent)
 	QWidget *central = new QWidget(this);
 	QVBoxLayout *winbox = new QVBoxLayout();
 
-	resize(800, 0);
+	resize(960, 0);
 	setWindowTitle("OpenLase Video Player");
 
 	b_playstop = new QPushButton("Play");
@@ -68,8 +81,6 @@ PlayerUI::PlayerUI(QWidget *parent)
 	connect(sl_time, SIGNAL(sliderReleased()), this, SLOT(timeReleased()));
 	connect(sl_time, SIGNAL(sliderMoved(int)), this, SLOT(timeMoved(int)));
 
-	winbox->addWidget(sl_time);
-
 	QHBoxLayout *controlsbox = new QHBoxLayout();
 	controlsbox->addWidget(b_playstop);
 	controlsbox->addWidget(b_pause);
@@ -79,22 +90,19 @@ PlayerUI::PlayerUI(QWidget *parent)
 	controlsbox->addWidget(new QLabel("Vol:"));
 	controlsbox->addLayout(Setting(volume, 0, 100, 1, false));
 
-	QHBoxLayout *settingsbox = new QHBoxLayout();
-	QFormLayout *tracebox = new QFormLayout();
 	QGroupBox *tracegroup = new QGroupBox("Tracing settings");
-	QHBoxLayout *modebox = new QHBoxLayout();
-
 	r_thresh = new QRadioButton("Threshold");
 	r_canny = new QRadioButton("Canny");
 	c_splitthresh = new QCheckBox("Split threshold");
-
 	connect(r_thresh, SIGNAL(clicked(bool)), this, SLOT(modeChanged()));
 	connect(r_canny, SIGNAL(clicked(bool)), this, SLOT(modeChanged()));
 	connect(c_splitthresh, SIGNAL(clicked(bool)), this, SLOT(splitChanged()));
 
+	QHBoxLayout *modebox = new QHBoxLayout();
 	modebox->addWidget(r_thresh);
 	modebox->addWidget(r_canny);
 	modebox->addWidget(c_splitthresh);
+	QFormLayout *tracebox = new QFormLayout();
 	tracebox->addRow("Mode", 			modebox);
 	tracebox->addRow("Scale", 			Setting(scale, 		10, 100, 1));
 	tracebox->addRow("Blur", 			Setting(blur, 		0, 500, 5));
@@ -119,11 +127,30 @@ PlayerUI::PlayerUI(QWidget *parent)
 	renderbox->addRow("Overscan", 		Setting(overscan, 	0, 100, 1));
 	rendergroup->setLayout(renderbox);
 
-	settingsbox->addWidget(tracegroup);
-	settingsbox->addWidget(rendergroup);
+	QHBoxLayout *settingsbox = new QHBoxLayout();
+	settingsbox->addWidget(tracegroup, 1);
+	settingsbox->addWidget(rendergroup, 1);
 
-	winbox->addLayout(controlsbox);
-	winbox->addLayout(settingsbox);
+	previewbox = new QGridLayout();
+	QHBoxLayout *previewbox_header = new QHBoxLayout();
+	c_preview = new QCheckBox("Preview");
+	c_preview_debug = new QCheckBox("Debug");
+	previewbox_header->addWidget(c_preview);
+	previewbox_header->addWidget(c_preview_debug);
+	previewbox_header->addStretch(1);
+
+	connect(c_preview_debug, SIGNAL(clicked(bool)), this, SLOT(previewDebugChanged()));
+
+	if (opt_debug) {
+		c_preview->setChecked(true);
+		c_preview_debug->setChecked(true);
+	}
+
+	winbox->addWidget(sl_time, 1);				// Video playback position
+	winbox->addLayout(controlsbox, 1);			// Buttons, Volumes
+	winbox->addLayout(settingsbox, 2);			// Tracing parameters
+	winbox->addLayout(previewbox_header, 1);	// Preview / Debug checkboxes
+	winbox->addLayout(previewbox, 6);			// Pictures
 
 	sb_fps = new QLabel();
 	sb_afps = new QLabel();
@@ -140,6 +167,11 @@ PlayerUI::PlayerUI(QWidget *parent)
 	updateSettingsUI();
 	central->setLayout(winbox);
 	setCentralWidget(central);
+
+	QTimer *timer = new QTimer(this);
+	timer->setInterval(1000);
+	connect(timer, SIGNAL(timeout()), this, SLOT(updatePreview()));
+	timer->start(100);
 }
 
 void PlayerUI::modeChanged()
@@ -233,13 +265,21 @@ void PlayerUI::open(const char *filename)
 {
 	qDebug() << "open:" << filename;
 	this->filename = filename;
+
 	loadSettings();
 	if(playvid_open(&player, filename)) {
 		qDebug() << "open failed";
 	}
+
+	settings.update_debug_images = c_preview_debug->isChecked();
+
 	playvid_set_eventcb(player, player_event_cb);
 	playvid_update_settings(player, &this->settings);
 	sl_time->setMaximum((int)(1000 * playvid_get_duration(player)));
+
+	if (opt_auto_play) {
+		playStopClicked();
+	}
 }
 
 void PlayerUI::playStopClicked(void)
@@ -292,7 +332,7 @@ void PlayerUI::updateSettings()
 
 void PlayerUI::playEvent(PlayerEvent *e)
 {
-	qDebug() << "Objects:" << e->objects;
+	ol_debug2("Objects: %d\n", e->objects);
 	sb_fps->setText(QString("FPS: %1").arg(1.0/e->ftime, 0, 'f', 2));
 	sb_afps->setText(QString("Avg: %1").arg(e->frames/e->time, 0, 'f', 2));
 	sb_objects->setText(QString("Obj: %1").arg(e->objects));
@@ -310,10 +350,131 @@ void PlayerUI::playEvent(PlayerEvent *e)
 				b_playstop->setText("Play");
 				sl_time->setValue(0);
 				playvid_seek(player, 0);
+				if (opt_auto_quit) {
+					exit(0);
+				}
 			}
 		} else {
 			sl_time->setValue((int)(e->pts * 1000));
 		}
+	}
+}
+
+QImage* get_image(PlayerCtx *player, int index)
+{
+	int width, height, stride, pix_fmt;
+	QImage::Format image_format;
+	uint8_t *buffer = playvid_get_image(player, index, &width, &height, &stride, &pix_fmt);
+	if (buffer != NULL) {
+		switch (pix_fmt) {
+		case AV_PIX_FMT_GRAY8: image_format = QImage::Format_Grayscale8; break;
+		case AV_PIX_FMT_RGB24: image_format = QImage::Format_RGB888; break;
+		default:
+			return NULL;
+		}
+		return new QImage(buffer, width, height, stride, image_format);
+	}
+	return NULL;
+}
+
+void PlayerUI::previewDebugChanged()
+{
+	bool debug = c_preview_debug->isChecked();
+	if (player != NULL) {
+		settings.update_debug_images = debug;
+		playvid_update_settings(player, &settings);
+	}
+}
+
+void PlayerUI::updatePreview()
+{
+	const int image_ids_canny[] = {IM_SMBUF, IM_SYBUF, IM_SXBUF};
+	const int image_ids_thresh[] = {IM_STBUF, IM_SIBUF, IM_BIBUF};
+	const int *image_ids;
+	int num_image_ids;
+
+	if (settings.canny) {
+		image_ids = image_ids_canny;
+		num_image_ids = sizeof(image_ids_canny) / sizeof(image_ids_canny[0]);
+	} else {
+		image_ids = image_ids_thresh;
+		num_image_ids = sizeof(image_ids_thresh) / sizeof(image_ids_thresh[0]);
+	}
+
+	QPixmap pixmaps[4];
+	int i, width, height, stride, pix_fmt, num_pixmaps = 0;
+	uint8_t *buffer;
+
+	// Get preview image
+	if (c_preview->isChecked()) {
+		QImage *image = get_image(player, IM_COLOR);
+		if (image != NULL) {
+			pixmaps[num_pixmaps++] = QPixmap::fromImage(*image);
+		}
+	}
+
+	// Get debug images
+	if (c_preview_debug->isChecked()) {
+		for (i = 0; i < num_image_ids; i++) {
+			QImage *image = get_image(player, image_ids[i]);
+			if (image != NULL) {
+				pixmaps[num_pixmaps++] = QPixmap::fromImage(*image);
+			}
+		}
+	}
+
+	int num_current_labels = preview_widgets.count();
+
+	// Update layout, if changed
+	if (num_current_labels != num_pixmaps) {
+		const int grid_params[4][4] = {
+			{ 0, 1, 3, 1 },
+			{ 0, 0, 1, 1 },
+			{ 1, 0, 1, 1 },
+			{ 2, 0, 1, 1 }
+		};
+
+		foreach(QLabel *widget, preview_widgets)
+			delete widget;
+		preview_widgets.clear();
+
+		for (int i = 0; i < num_pixmaps; i++) {
+			QLabel *label = new QLabel();
+			label->setMinimumWidth(120);
+			label->setMinimumHeight(120);
+			label->setSizePolicy(QSizePolicy(QSizePolicy::Expanding,
+											 QSizePolicy::Expanding));
+
+			const int *p = grid_params[i];
+			previewbox->addWidget(label, p[0], p[1], p[2], p[3]);
+			preview_widgets.append(label);
+		}
+
+		if (num_pixmaps == 1) {
+			previewbox->setColumnStretch(0, 0);
+			previewbox->setColumnStretch(1, 100);
+			previewbox->setRowStretch(0, 100);
+			previewbox->setRowStretch(1, 0);
+			previewbox->setRowStretch(2, 0);
+		} else {
+			previewbox->setColumnStretch(0, 25);
+			previewbox->setColumnStretch(1, 75);
+			previewbox->setRowStretch(0, 33);
+			previewbox->setRowStretch(1, 33);
+			previewbox->setRowStretch(2, 33);
+		}
+	}
+
+	// Update pictures
+	num_pixmaps = num_pixmaps < preview_widgets.count() ? num_pixmaps : preview_widgets.count();
+	for (i = 0; i < num_pixmaps; i++) {
+		QLabel *label = preview_widgets.at(i);
+		int w = label->width();
+		int h = label->height();
+		QPixmap pixmap = pixmaps[i];
+		pixmap = pixmap.scaled(w, h, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+		label->setPixmap(pixmap);
+		label->update();
 	}
 }
 
@@ -338,7 +499,8 @@ void PlayerUI::timeMoved(int value)
 {
 	if (!player)
 		return;
-	qDebug() << "timeMoved" << value;
+	ol_debug("timeMoved %d\n", value);
+	//qDebug() << "timeMoved" << value;
 	playvid_seek(player, value / 1000.0);
 }
 
@@ -356,17 +518,25 @@ bool PlayerUI::event(QEvent *e)
 void PlayerUI::loadSettings(void)
 {
 	QFile file(filename + ".cfg");
+	QFile file2 = QString(QFileInfo(file).dir().filePath("default.cfg"));
+	QFile *pfile = &file;
 	if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
-		qDebug() << "Settings load failed";
-		return;
+		//file = QFileInfo(file).absolutePath();
+		if (!file2.open(QIODevice::ReadOnly | QIODevice::Text)) {
+			ol_info("No default settings found %s\n", file2.fileName().toLocal8Bit().constData());
+			return;
+		}
+		pfile = &file2;
 	}
-	QTextStream ts(&file);
+
+	ol_info("Loading settings from %s\n", pfile->fileName().toLocal8Bit().constData());
+	QTextStream ts(pfile);
 	QString line;
 	while (!(line = ts.readLine()).isNull()) {
 		QStringList l = line.split("=");
 		if (l.length() != 2)
 			continue;
-		qDebug() << "Got setting" << l[0] << "value" << l[1];
+		ol_debug("Got setting %s value %s\n", QS(l[0]), QS(l[1]));
 		QString name = l[0];
 		int val = l[1].toInt();
 		if (name == "canny") {
@@ -498,12 +668,56 @@ void player_event_cb(PlayerEvent *ev)
 	app->postEvent(ui, qev);
 }
 
+void usage(const char *argv0)
+{
+	fprintf(stderr, "Usage: %s [options] inputfile\n\n", argv0);
+	fprintf(stderr, "Options:\n");
+	fprintf(stderr, "  -h|?          Help\n");
+	fprintf(stderr, "  -q            Decrease verbosity (max -qq)\n");
+	fprintf(stderr, "  -v            Increase verbosity (max -vvvv)\n");
+	fprintf(stderr, "  -a            Auto playing mode\n");
+	fprintf(stderr, "  -A            Auto playing mode without quit\n");
+}
+
 int main (int argc, char *argv[])
 {
 	app = new QApplication(argc, argv);
+
+	char optchar;
+
+	while ((optchar = getopt(argc, argv, "hqvapd")) != -1) {
+		switch (optchar) {
+			case 'h':
+			case '?':
+				usage(argv[0]);
+				return 0;
+			case 'q':
+				playvid_opt_verbose -= 1;
+				break;
+			case 'v':
+				playvid_opt_verbose += 1;
+				break;
+			case 'a':
+				opt_auto_play = 1;
+				break;
+			case 'p':
+				opt_auto_play = 1;
+				opt_auto_quit = 1;
+				break;
+			case 'd':
+				opt_debug = 1;
+				break;
+		}
+	}
+
+	if (optind == argc) {
+		usage(argv[0]);
+		return 1;
+	}
+
 	playvid_init();
 	ui = new PlayerUI();
-	ui->open(argv[1]);
+	ui->open(argv[optind]);
 	ui->show();
 	int ret = app->exec();
 	delete ui;

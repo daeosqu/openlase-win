@@ -1,0 +1,35 @@
+<CPackWiXPatch>
+  <CPackWiXFragment Id="#PRODUCT">
+
+    <Property Id="POWERSHELLEXE">
+      <RegistrySearch Id="POWERSHELLEXE"
+                      Type="raw"
+                      Root="HKLM"
+                      Key="SOFTWARE\Microsoft\PowerShell\1\ShellIds\Microsoft.PowerShell"
+                      Win64="yes"
+                      Name="Path" />
+    </Property>
+
+    <Condition Message="This application requires Windows PowerShell.">
+      <![CDATA[Installed OR POWERSHELLEXE]]>
+    </Condition>
+
+    <Property Id="RegisterStartMenu" Value=" "/>
+    <CustomAction Id="SetRegisterStartMenuCommand"
+                  Property="RegisterStartMenu"
+                  Value="&quot;[CM_DP_Applications.bin.scripts.win]register-startmenu.cmd&quot; -allusers"/>
+
+    <CustomAction Id="RegisterStartMenu"
+                  BinaryKey="WixCA"
+                  DllEntry="WixQuietExec64"
+                  Execute="deferred"
+                  Return="check"
+                  Impersonate="no" />
+
+    <InstallExecuteSequence>
+      <Custom Action="SetRegisterStartMenuCommand" After="InstallFiles">NOT Installed</Custom>
+      <Custom Action="RegisterStartMenu" After="SetRegisterStartMenuCommand">NOT Installed</Custom>
+    </InstallExecuteSequence>
+
+  </CPackWiXFragment>
+</CPackWiXPatch>

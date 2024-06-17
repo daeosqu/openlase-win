@@ -1,4 +1,4 @@
-#!python3
+#!/usr/bin/env python3
 
 import os
 import sys
@@ -6,6 +6,7 @@ import re
 import subprocess
 import unicodedata
 from pathlib import Path
+import shlex
 
 import click
 import jaconv
@@ -93,7 +94,6 @@ class MediaManager:
     def _get_row_fetch(self, url):
         with yt_dlp.YoutubeDL(self.get_fetch_opts()) as ydl:
             info = ydl.extract_info(url, download=False)
-            print(info)
             row = {
                 'id': None,
                 'hash': info['id'],
@@ -125,8 +125,8 @@ class MediaManager:
         filename = idstr + '.' + mediakey + '.' + self.normalize_filename(row['title']) + '.' + row['ext']
 
         old = {
-            'cache': row['cache'],
-            'media': row['media'],
+            'cache': row.get('cache'),
+            'media': row.get('media'),
         }
 
         row['idstr'] = idstr
@@ -134,7 +134,7 @@ class MediaManager:
         row['media'] = filename
 
         def rename_file(key):
-            if row[key] != old[key]:
+            if old[key] is not None and old[key] != row[key]:
                 p = getattr(self, key + '_dir') / old[key]
                 if p.exists():
                     p.rename(getattr(self, key + '_dir') / row[key])
@@ -149,7 +149,8 @@ class MediaManager:
 class MediaFile:
 
     MAX_WIDTH = 1280
-    VIDEO_BIT_RATE = '640k'
+    MIN_VIDEO_BIT_RATE = 786432
+    MAX_VIDEO_BIT_RATE = 2097152
     MAX_AUDIO_BIT_RATE = 256000
 
     def __init__(self, mm, row):
@@ -188,7 +189,7 @@ class MediaFile:
     def ensure_cache(self):
         filepath = self.cache_path
         if not filepath.exists():
-            print(f'{self.idstr}: download: path={str(filepath)}')
+            print(f'{self.idstr}: download: path={str(filepath)}', file=sys.stderr)
             self.prepare()
             with yt_dlp.YoutubeDL(self.mm.get_download_opts(filepath)) as ydl:
                 ydl.download([self.url])
@@ -216,51 +217,86 @@ class MediaFile:
         if not ofilepath.exists():
             self.ensure_cache()
 
-            print(f'{self.idstr}: convert: path={str(ifilepath)}')
+            print(f'{self.idstr}: convert: path={str(ifilepath)}', file=sys.stderr)
             self.prepare()
 
-            probe = ffmpeg.probe(str(ifilepath))
-            video_info = next(s for s in probe['streams'] if s['codec_type'] == 'video')
-            audio_info = next(s for s in probe['streams'] if s['codec_type'] == 'audio')
+            if False:
+                postprocess_cmd = str(Path(__file__).parent / "postprocess.cmd")
+                res = subprocess.run([postprocess_cmd, str(ifilepath), str(ofilepath)], stdout=subprocess.PIPE)
+                #print(res.stdout, file=sys.stderr, end='')
+            else:
+                probe = ffmpeg.probe(str(ifilepath))
+                video_info = next(s for s in probe['streams'] if s['codec_type'] == 'video')
+                audio_info = next(s for s in probe['streams'] if s['codec_type'] == 'audio')
 
-            fps1, fps2 = video_info['r_frame_rate'].split('/')
-            fps = float(fps1) / float(fps2)
-            print(f'input video fps is {fps}')
+                fps1, fps2 = video_info['r_frame_rate'].split('/')
+                fps = float(fps1) / float(fps2)
+                audio_bit_rate = round(float(audio_info['bit_rate']))
+                video_bit_rate = round(float(video_info['bit_rate']))
+                print(f'input video fps is {fps}', file=sys.stderr)
+                print(f'video bit rate is {video_bit_rate}', file=sys.stderr)
+                print(f'audio bit rate is {audio_bit_rate}', file=sys.stderr)
 
-            audio_bit_rate = round(float(audio_info['bit_rate']))
-            print(f'audio bit rate is {audio_bit_rate}')
+                media = ffmpeg.input(str(ifilepath))
+                video = media.video
+                audio = media.audio
 
-            media = ffmpeg.input(str(ifilepath))
-            video = media.video
-            audio = media.audio
+                if fps > 30.1:
+                    video = video.filter('fps',
+                                         fps=min(fps, 30),
+                                         round='down')
 
-            video = video.filter('scale', 1280, -1,
-                                 force_original_aspect_ratio='decrease')
+                video = video.filter('scale', 720, -1,
+                                     force_original_aspect_ratio='decrease')
 
-            if fps > 30.1:
-                video = video.filter('fps',
-                                     fps=min(fps, 30),
-                                     round='down')
+#-threads 1 -hwaccel nvdec -hwaccel_device 0 -hwaccel_output_format cuda 
 
-            media = ffmpeg.concat(video, audio, v=1, a=1)
+                # video = video.filter('histeq',
+                #                      strength=0.05,
+                #                      intensity=0.1,
+                #                      antibanding="none")
 
-            output_options = {
-                'vcodec': vcodec,
-                'acodec': 'aac',
-                'b:v': self.VIDEO_BIT_RATE,
-            }
+                # video = video.filter('eq',
+                #                      saturation=1.5,
+                #                      contrast=1.4,
+                #                      gamma=1.2,
+                #                      gamma_weight=0.8)
 
-            if audio_bit_rate > self.MAX_AUDIO_BIT_RATE:
-                output_options['b:a'] = str(self.MAX_AUDIO_BIT_RATE)
+                video = video.filter('format',
+                                     'yuv420p')
 
-            (
-                media
-                .output(str(ofilepath), **output_options)
-                .global_args('-hide_banner')
-                .global_args('-hwaccel_device', 'auto')
-                .global_args('-hwaccel', 'auto')
-                .run()
-            )
+                media = ffmpeg.concat(video, audio, v=1, a=1)
+
+                output_options = {
+                    'vcodec': vcodec,
+                    'acodec': 'aac',
+                    'g': 30,  # keyframe > 3
+                }
+
+                video_bit_rate = video_bit_rate * 1.2 + 128*1024
+                if video_bit_rate < self.MIN_VIDEO_BIT_RATE:
+                    video_bit_rate = self.MIN_VIDEO_BIT_RATE
+
+                if video_bit_rate > self.MAX_VIDEO_BIT_RATE:
+                    output_options['b:v'] = str(self.MAX_VIDEO_BIT_RATE)
+                else:
+                    output_options['b:v'] = str(video_bit_rate)
+
+                if audio_bit_rate > self.MAX_AUDIO_BIT_RATE:
+                    output_options['b:a'] = str(self.MAX_AUDIO_BIT_RATE)
+
+                cmd = (
+                    media
+                    .output(str(ofilepath), **output_options)
+                    .global_args('-hide_banner')
+                    .global_args('-hwaccel_device', 'auto')
+                    .global_args('-hwaccel', 'auto')
+                )
+
+                args = ' '.join(map(shlex.quote, cmd.get_args()))
+                print(f"FFmpeg Arguments: {args}", file=sys.stderr)
+
+                cmd.run()
 
 
 @click.command(
@@ -315,13 +351,18 @@ class MediaFile:
     help="Force convert",
 )
 @click.option(
+    "--force-convert-all",
+    is_flag=True,
+    help="Force convert all",
+)
+@click.option(
     "--id",
     "by_id",
     is_flag=True,
     help="Print filenames with id",
 )
 @click.argument("args", nargs=-1)
-def main(list_files, migrate, playvid, playvid2, qplayvid, command, force_convert, by_id, args):
+def main(list_files, migrate, playvid, playvid2, qplayvid, command, force_convert, force_convert_all, by_id, args):
     mm = MediaManager()
 
     if migrate:
@@ -334,6 +375,11 @@ def main(list_files, migrate, playvid, playvid2, qplayvid, command, force_conver
             arr = []
         for mf in arr:
             print(str(mf.media_path), file=original_stdout)
+    elif force_convert_all:
+        for mf in mm.all():
+            mf.delete()
+            mf.ensure_video()
+        return
     else:
         if playvid:
             command = 'playvid'
@@ -342,7 +388,7 @@ def main(list_files, migrate, playvid, playvid2, qplayvid, command, force_conver
         elif qplayvid:
             command = 'qplayvid'
 
-        if by_id is not None:
+        if by_id:
             op = mm.get_by_id
         else:
             op = mm.get

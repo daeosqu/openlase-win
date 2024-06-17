@@ -1,48 +1,62 @@
 # QuickStart
 
-スタートメニューから openlase を起動します。Unix または Msys の場合は以下のように /usr/local/openlase/bin/openlase.sh をロードします。
+Quick start manual for OpenLase-win
 
-OpenLase-win を利用する場合は毎回実行する必要があります。
+# Requirements
 
-## Windows
+Install OpenLase-win and download and install required software.
 
+- [JACK 1.9.22 win64](https://github.com/jackaudio/jack2-releases/releases/download/v1.9.22/jack2-win64-v1.9.22.exe) JACK Audio Connection Kit for Windows 64bit
+- AutoHotkey
+- Python3.11 (C:\opt\python311)
+- FFmpeg (`scoop install ffmpeg`)
+- [laserdock_jack](https://github.com/daeosqu/laserdock_jack.git) if you have LaserCube
+
+# Setup QjackCtl
+
+1. Run `qjackctl` (`C:/Program Files/JACK2/qjackctl/qjackctl.exe`)
+1. Push `Patchbay...` button.
+  1. Push `Load...` button.
+    1. Load 
+    1. Push `Activate` button.
+1. Push `Setup...` button.
+  1. Set `Driver` to `portaudio` in Settings tab.
+  1. Set parameters.
+    - Sample Rate: 48000
+    - Frames/Period: 1024
+  1. Check `Start JACK audio server on application startup` in Misc tab.
+  1. `Option` tab.
+    1. Check `Activate Patchbay persistence` in Misc tab.
+    1. And select file `share/openlase/openlase-laserjack.xml` in openlase directory.
+1. Restart qjackctl
+
+Important: Samplerate and bitrate must be same as windows audio device.
+
+# Run openlase terminal
+
+Start openlase-x.x.x in start menu or execute `source /usr/local/openlase/bin/openlase.sh` for bash.
+
+# Setup (first time)
+
+Install required python packages.
+
+```powershel
+python -m pip install click jaconv yt_dlp ffmpeg-python tinydb pillow opencv-contrib-python
 ```
-"C:\Program Files\openlase\bin\openlase.cmd"
-```
 
-## MinGW
+# Start OpenLase environment
 
-```
-. /ucrt64/local/openlase/bin/openlase.sh
-```
-
-## Unix
-
-```
-. /usr/local/openlase/bin/openlase.sh
-```
-
-# Setup
-
-```
-pip3 install -r requirements.txt
-```
-
-# OpenLase-win の開始
-
-```
+```powershel
 olstart
 ```
 
-QjackCtl の Patchbay で config/openlase-laserdock.xml をロードしてアクティブ化します。オプションで Activate Patchbay persistence にチェックを入れて config/openlase-laserdock.xml を指定しておきます。
-
-# simple
+# Run simple exaple
 
 ```
 simple
 ```
 
-# Bad Apple
+# Play bad Apple
 
 ```
 oldownload "https://www.nicovideo.jp/watch/sm8628149"
@@ -53,7 +67,7 @@ playvid (Get-Item $env:OL_DATA_DIR\media\*Bad_Apple*Shadow*.mp4)
 
 ```
 oldownload "uOyaCOViAPA"
-playvid2 (Get-Item $env:OL_DATA_DIR\media\*Bad_Apple*Color*.mp4)
+qplayvid (Get-Item $env:OL_DATA_DIR\media\*Bad_Apple*Color*.mp4)
 ```
 
 # oldownload
@@ -107,7 +121,7 @@ Or use -p or --play option.
 oldownload -p "https://www.youtube.com/watch?v=a6-MraffDlE"
 ```
 
-# ugoira (うごイラ)
+# ugoira
 
 1. PixivUtil2 の readme を読んでログイン可能である事を確認して下さい。
 1. 設定は以下のように変更します。

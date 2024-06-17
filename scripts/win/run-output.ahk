@@ -2,22 +2,19 @@
 
 ;; Author: Daisuke Arai
 
+#NoEnv
 #Warn
 #SingleInstance ignore
 
-#Include %A_ScriptDir%\functions.ahk
+SetBatchLines, -1
 
-Arguments := ""
-for Key, Value in A_Args
-  Arguments .= Value . " "
+#Include %A_ScriptDir%\common.ahk
+;;DEBUG := True
 
-;DllCall("AllocConsole")
-
-RunOutput(Arguments)
-
-; WinActivate, ahk_id %old_hwnd%
-; WinWaitActive, ahk_id %old_hwnd%
-; ExitApp
+activate := False
+hide_console := True
+RunOutput(Arguments, "", activate, hide_console)
+Restore()
 
 ; Local Variables:
 ; coding: utf-8-with-signature-dos

@@ -20,7 +20,11 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #ifndef TRACE_H
 #define TRACE_H
 
-#include "libol_common.h"
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+#include "libol/libol_export.h"
 
 typedef struct OLTraceCtx OLTraceCtx;
 
@@ -53,12 +57,16 @@ typedef struct {
 	OLTraceObject *objects;
 } OLTraceResult;
 
-OL_EXPORT int olTraceInit(OLTraceCtx **ctx, OLTraceParams *params);
-OL_EXPORT int olTraceReInit(OLTraceCtx *ctx, OLTraceParams *params);
+LIBOL_EXPORT int olTraceInit(OLTraceCtx **ctx, OLTraceParams *params);
+LIBOL_EXPORT int olTraceReInit(OLTraceCtx *ctx, OLTraceParams *params);
 
-OL_EXPORT int olTrace(OLTraceCtx *ctx, uint8_t *src, icoord stride, OLTraceResult *result);
-OL_EXPORT void olTraceFree(OLTraceResult *result);
+LIBOL_EXPORT int olTrace(OLTraceCtx *ctx, uint8_t *src, icoord stride, OLTraceResult *result);
+LIBOL_EXPORT void olTraceFree(OLTraceResult *result);
 
-OL_EXPORT void olTraceDeinit(OLTraceCtx *ctx);
+LIBOL_EXPORT void olTraceDeinit(OLTraceCtx *ctx);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

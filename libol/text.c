@@ -18,8 +18,8 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
 #include <math.h>
-#include "libol.h"
-#include "text.h"
+#include "libol/libol.h"
+#include "libol/text.h"
 
 extern Font default_font;
 

@@ -1,8 +1,8 @@
-#include "libol.h"
+#include "libol/libol.h"
+#include "libol/trace.h"
+
 #include <math.h>
 #include <string.h>
-
-#include "trace.h"
 
 #define ABS(a) ((a)<0?(-(a)):(a))
 

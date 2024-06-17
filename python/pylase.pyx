@@ -23,7 +23,7 @@ from libc.stdint cimport *
 from libc.stdlib cimport malloc, free
 from libc.string cimport memcpy
 
-cdef extern from "libol.h":
+cdef extern from "libol/libol.h":
 	enum:
 		OL_LINESTRIP
 		OL_BEZIERSTRIP
@@ -491,7 +491,7 @@ cpdef setLogCallback(object func):
 	else:
 		olSetLogCallback(NULL)
 
-cdef extern from "text.h":
+cdef extern from "libol/text.h":
 	ctypedef struct _Font "Font"
 
 	_Font *olGetDefaultFont()
@@ -533,7 +533,7 @@ cpdef float drawString(object font, tuple coord, float height, uint32_t color, o
 	x, y = coord
 	return olDrawString(fnt.font, x, y, height, color, _cstr(s))
 
-cdef extern from "ilda.h":
+cdef extern from "libol/ilda.h":
 	ctypedef struct _IldaFile "IldaFile"
 
 	_IldaFile *olLoadIlda(char *filename)
@@ -560,7 +560,7 @@ cpdef drawIlda3D(object ilda):
 	olDrawIlda3D(f.ilda)
 
 IF BUILD_TRACER == "Y":
-	cdef extern from "trace.h":
+	cdef extern from "libol/trace.h":
 		ctypedef struct OLTraceCtx
 
 		ctypedef enum OLTraceMode:

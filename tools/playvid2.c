@@ -18,10 +18,8 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
-#include "ol_compat.h"
-
-#include "libol.h"
-#include "trace.h"
+#include "libol/libol.h"
+#include "libol/trace.h"
 
 #include <stdio.h>
 #include <errno.h>
@@ -59,8 +57,21 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #define SAMPLE_RATE 48000
 #define AUDIO_BUF 3
 
+#define CONFIG_LINE_BUFFER_SIZE 1024
+
 #ifndef AVCODEC_MAX_AUDIO_FRAME_SIZE
 # define AVCODEC_MAX_AUDIO_FRAME_SIZE 192000
+#endif
+
+#define LOG_ERROR 1
+#define LOG_WARN 2
+#define LOG_INFO 3
+#define LOG_VERBOSE 4
+#define LOG_DEBUG 5
+
+#ifndef TRUE
+#define TRUE 1
+#define FALSE 0
 #endif
 
 typedef struct {
@@ -155,27 +166,37 @@ struct PlayerCtx {
 	pthread_cond_t v_buf_not_empty;
 };
 
-int opt_quiet = 0;
+int opt_verbose = 0;
 
-int ferr(const char *format, ...) {
-    va_list args;
-    int result = 0;
-    va_start(args, format);
-    if (!opt_quiet)
-        result = vfprintf(stderr, format, args);
-    va_end(args);
-    return result;
+int ol_vfprintf(int level, const char* tag, FILE* file, const char *format, va_list arg_ptr) {
+    level -= opt_verbose;
+    if (level > LOG_WARN)
+        return 0;
+    if (tag != NULL) {
+        fputs("[", file);
+        fputs(tag, file);
+        fputs("] ", file);
+    }
+    int ret = vfprintf(file, format, arg_ptr);
+    fflush(file);
+    return ret;
 }
 
-int fverbose(const char *format, ...) {
-    va_list args;
-    int result = 0;
-    va_start(args, format);
-    if (!opt_quiet)
-        result = vfprintf(stdout, format, args);
-    va_end(args);
-    return result;
-}
+#define def_ol_print(name, level) \
+	int ol_##name(const char *format, ...) { \
+	    va_list args; \
+	    int result = 0; \
+	    va_start(args, format); \
+	    result = ol_vfprintf(LOG_##level, #level, stderr, format, args); \
+	    va_end(args); \
+	    return result; \
+	}
+
+def_ol_print(err, ERROR);
+def_ol_print(warn, WARN);
+def_ol_print(info, INFO);
+def_ol_print(verbose, VERBOSE);
+def_ol_print(debug, DEBUG);
 
 size_t decode_audio(PlayerCtx *ctx, AVPacket *packet, int new_packet, int32_t seekid)
 {
@@ -187,9 +208,12 @@ size_t decode_audio(PlayerCtx *ctx, AVPacket *packet, int new_packet, int32_t se
 #if 1
     /* avcodec_decode_audio4 is deprecated https://github.com/pesintta/vdr-plugin-vaapidevice/issues/32 */
 	decoded = avcodec_decode_audio4(ctx->a_codec_ctx, ctx->a_frame, &got_frame, packet);
+    if (decoded > 0)
+        got_frame = TRUE;
 #else
     int ret;
     char errbuf[AV_ERROR_MAX_STRING_SIZE] = "";
+    decoded = 0;
     ret = avcodec_receive_frame(ctx->a_codec_ctx, ctx->a_frame);
     if (ret == 0)
         got_frame = TRUE;
@@ -200,14 +224,14 @@ size_t decode_audio(PlayerCtx *ctx, AVPacket *packet, int new_packet, int32_t se
     if (ret == AVERROR(EAGAIN))
         ret = 0;
     else if (ret < 0) {
-        ferr("avcodec_send_packet: %s\n", av_make_error_string(errbuf, sizeof(errbuf), ret));
+        ol_err("avcodec_send_packet: %s\n", av_make_error_string(errbuf, sizeof(errbuf), ret));
     }
 #endif
 	if (!got_frame) {
-		fprintf(stderr, "Error while decoding audio frame\n");
-		decoded = packet->size;
+		ol_err("Error while decoding audio frame\n");
 		goto fail;
 	}
+
 	int in_samples = ctx->a_frame->nb_samples;
 	if (!in_samples)
 		goto fail;
@@ -230,7 +254,7 @@ size_t decode_audio(PlayerCtx *ctx, AVPacket *packet, int new_packet, int32_t se
 			free_samples += ctx->a_buf_len;
 
 		if (free_samples <= out_samples) {
-			ferr("Wait for space in audio buffer (get: %i put: %i)\n", ctx->a_buf_get, ctx->a_buf_put);
+			ol_err("Wait for space in audio buffer (get: %i put: %i)\n", ctx->a_buf_get, ctx->a_buf_put);
 			pthread_cond_wait(&ctx->a_buf_not_full, &ctx->a_buf_mutex);
 		} else {
 			break;
@@ -255,7 +279,7 @@ size_t decode_audio(PlayerCtx *ctx, AVPacket *packet, int new_packet, int32_t se
 			put = 0;
 	}
 
-	//ferr("Put %d audio samples at pts %f\n", out_samples, ctx->a_cur_pts);
+	//ol_err("Put %d audio samples at pts %f\n", out_samples, ctx->a_cur_pts);
 
 	pthread_mutex_lock(&ctx->a_buf_mutex);
 	ctx->a_buf_put = put;
@@ -293,7 +317,7 @@ VideoFrame* get_color_frame(PlayerCtx *ctx, int width, int height, int bytes_per
 		frame->stride = (((width+15)&~15) * bytes_per_pixel + 15) & ~15;
 		frame->data_size = frame->stride * (((height+15)&~15) * bytes_per_pixel + 15) & ~15;
 		frame->data = malloc(frame->data_size);
-        //printf("numBytes=%d, frame->data_size=%d\n", numBytes, frame->data_size);
+        //ol_verbose("numBytes=%d, frame->data_size=%d\n", numBytes, frame->data_size);
 		frame->width = width;
 		frame->height = height;
 		ctx->c_bufs[ctx->v_buf_put] = frame;
@@ -309,14 +333,13 @@ void save_avframe_ppm(const char* filename, uint8_t* data, int width, int height
   if (fp == NULL)
       return;
 
-  //ferr("%d, %d, %d\n", pFrame->width, pFrame->linesize[0], stride);
   fprintf(fp, "P6\n%d %d\n255\n", width, height);
   for (y = 0; y < height; y++)
       //fwrite(pFrame->data[0] + y * pFrame->linesize[0], 1, width * 3, fp);
       fwrite(data + y * stride, 1, width * 3, fp);
   fclose(fp);
 
-  fverbose("wrote %s\n", filename);
+  ol_verbose("wrote %s\n", filename);
 }
 
 size_t decode_video(PlayerCtx *ctx, AVPacket *packet, int new_packet, int32_t seekid)
@@ -325,14 +348,14 @@ size_t decode_video(PlayerCtx *ctx, AVPacket *packet, int new_packet, int32_t se
 	int got_frame;
 
 	if (!new_packet)
-		fprintf(stderr, "warn: multi-frame video packets, pts might be inaccurate\n");
+		ol_warn("warn: multi-frame video packets, pts might be inaccurate\n");
 
 	ctx->v_pkt_pts = packet->pts;
 
 	ctx->v_frame = av_frame_alloc();
 	decoded = avcodec_decode_video2(ctx->v_codec_ctx, ctx->v_frame, &got_frame, packet);
 	if (decoded < 0) {
-		fprintf(stderr, "Error while decoding video frame\n");
+		ol_err("Error while decoding video frame\n");
 		decoded = packet->size;
 		goto fail;
 	}
@@ -341,7 +364,7 @@ size_t decode_video(PlayerCtx *ctx, AVPacket *packet, int new_packet, int32_t se
 
 #if 1
     if (!got_frame) {
-        ferr("skip\n");
+        ol_err("skip\n");
     } else {
         pthread_mutex_lock(&ctx->settings_mutex);
         int color_scaled_width = ctx->width * ctx->color_scale;
@@ -376,7 +399,7 @@ size_t decode_video(PlayerCtx *ctx, AVPacket *packet, int new_packet, int32_t se
         int ret;
         ret = sws_scale(ctx->color_sws_ctx, (const uint8_t**)ctx->v_frame->data, ctx->v_frame->linesize, 0, ctx->v_codec_ctx->height, picFrame.data, picFrame.linesize);
         if (ret < 0) {
-            fprintf(stderr, "sws_scale failed\n");
+            ol_err("sws_scale failed\n");
         } else {
             //save_avframe_ppm("frame2.ppm", picFrame.data[0], color_frame->width, color_frame->height, color_frame->stride);
         }
@@ -422,7 +445,7 @@ size_t decode_video(PlayerCtx *ctx, AVPacket *packet, int new_packet, int32_t se
 
 	pthread_mutex_lock(&ctx->v_buf_mutex);
 	while (((ctx->v_buf_put + 1) % ctx->v_buf_len) == ctx->v_buf_get) {
-		//ferr("Wait for space in video buffer\n");
+		//ol_err("Wait for space in video buffer\n");
 		pthread_cond_wait(&ctx->v_buf_not_full, &ctx->v_buf_mutex);
 	}
 	pthread_mutex_unlock(&ctx->v_buf_mutex);
@@ -460,7 +483,7 @@ size_t decode_video(PlayerCtx *ctx, AVPacket *packet, int new_packet, int32_t se
 	frame->pts = av_q2d(ctx->v_stream->time_base) * pts;
 	frame->seekid = seekid;
 
-	//ferr("Put frame %d (pts:%f seekid:%d)\n", ctx->v_buf_put, frame->pts, seekid);
+	//ol_err("Put frame %d (pts:%f seekid:%d)\n", ctx->v_buf_put, frame->pts, seekid);
 	pthread_mutex_lock(&ctx->v_buf_mutex);
 	if (++ctx->v_buf_put == ctx->v_buf_len)
 		ctx->v_buf_put = 0;
@@ -478,7 +501,7 @@ void push_eof(PlayerCtx *ctx, int32_t seekid)
 	if (ctx->audio_idx != -1) {
 		pthread_mutex_lock(&ctx->a_buf_mutex);
 		while (((ctx->a_buf_put + 1) % ctx->a_buf_len) == ctx->a_buf_get) {
-			//ferr("Wait for space in audio buffer\n");
+			//ol_err("Wait for space in audio buffer\n");
 			pthread_cond_wait(&ctx->a_buf_not_full, &ctx->a_buf_mutex);
 		}
 		ctx->a_buf[ctx->a_buf_put].l = 0;
@@ -493,7 +516,7 @@ void push_eof(PlayerCtx *ctx, int32_t seekid)
 
 	pthread_mutex_lock(&ctx->v_buf_mutex);
 	while (((ctx->v_buf_put + 1) % ctx->v_buf_len) == ctx->v_buf_get) {
-		ferr("Wait for space in video buffer\n");
+		ol_err("Wait for space in video buffer\n");
 		pthread_cond_wait(&ctx->v_buf_not_full, &ctx->v_buf_mutex);
 	}
 
@@ -518,7 +541,7 @@ void *decoder_thread(void *arg)
 	size_t decoded_bytes;
 	int seekid = ctx->cur_seekid;
 
-	ferr("Decoder thread started\n");
+	ol_info("Decoder thread started\n");
 
 	memset(&packet, 0, sizeof(packet));
 	memset(&cpacket, 0, sizeof(cpacket));
@@ -530,7 +553,7 @@ void *decoder_thread(void *arg)
 				av_free_packet(&packet);
 			pthread_mutex_lock(&ctx->seek_mutex);
 			if (ctx->cur_seekid > seekid) {
-				ferr("Seek! %f\n", ctx->seek_pos);
+				ol_err("Seek! %f\n", ctx->seek_pos);
 				av_seek_frame(ctx->fmt_ctx, -1, (int64_t)(ctx->seek_pos * AV_TIME_BASE), 0);
 				seekid = ctx->cur_seekid;
 				// HACK! Avoid deadlock by waking up the video waiter
@@ -542,7 +565,7 @@ void *decoder_thread(void *arg)
 				avcodec_flush_buffers(ctx->v_codec_ctx);
 			}
 			if (av_read_frame(ctx->fmt_ctx, &packet) < 0) {
-				fprintf(stderr, "decoder thread EOF!\n");
+				ol_err("decoder thread EOF!\n");
                 ctx->eof = 1;
 				push_eof(ctx, seekid);
 				pthread_cond_wait(&ctx->seek_cond, &ctx->seek_mutex);
@@ -589,18 +612,18 @@ int decoder_init(PlayerCtx *ctx, const char *file)
 
 	AVInputFormat *format = NULL;
 	if (!strncmp(file, "x11grab://", 10)) {
-		ferr("Using X11Grab\n");
+		ol_err("Using X11Grab\n");
 		format = av_find_input_format("x11grab");
 		file += 10;
 	}
 
 	if (avformat_open_input(&ctx->fmt_ctx, file, format, NULL) != 0) {
-		ferr("Couldn't open input file %s\n", file);
+		ol_err("Couldn't open input file %s\n", file);
 		return -1;
 	}
 
 	if (avformat_find_stream_info(ctx->fmt_ctx, NULL) < 0) {
-		ferr("Couldn't get stream info\n");
+		ol_err("Couldn't get stream info\n");
 		return -1;
 	}
 
@@ -625,7 +648,7 @@ int decoder_init(PlayerCtx *ctx, const char *file)
 	}
 
 	if (ctx->video_idx == -1) {
-		ferr("No video streams\n");
+		ol_err("No video streams\n");
 		return -1;
 	}
 
@@ -634,15 +657,15 @@ int decoder_init(PlayerCtx *ctx, const char *file)
 		ctx->a_codec_ctx = ctx->a_stream->codec;
 		ctx->a_codec = avcodec_find_decoder(ctx->a_codec_ctx->codec_id);
 		if (ctx->a_codec == NULL) {
-			ferr("No audio codec\n");
+			ol_err("No audio codec\n");
 			return -1;
 		}
 		if (avcodec_open2(ctx->a_codec_ctx, ctx->a_codec, NULL) < 0) {
-			ferr("Failed to open audio codec\n");
+			ol_err("Failed to open audio codec\n");
 			return -1;
 		}
 
-		ferr("Audio srate: %d\n", ctx->a_codec_ctx->sample_rate);
+		ol_err("Audio srate: %d\n", ctx->a_codec_ctx->sample_rate);
 
 #if USE_AVRESAMPLE
 		ctx->a_resampler = avresample_alloc_context();
@@ -683,12 +706,12 @@ int decoder_init(PlayerCtx *ctx, const char *file)
 
 	ctx->v_codec = avcodec_find_decoder(ctx->v_codec_ctx->codec_id);
 	if (ctx->v_codec == NULL) {
-		ferr("No video codec\n");
+		ol_err("No video codec\n");
 		return -1;
 	}
 
 	if (avcodec_open2(ctx->v_codec_ctx, ctx->v_codec, NULL) < 0) {
-		ferr("Failed to open video codec\n");
+		ol_err("Failed to open video codec\n");
 		return -1;
 	}
 
@@ -737,7 +760,7 @@ void drop_audio(PlayerCtx *ctx, int by_pts)
 			if (++get == ctx->a_buf_len)
 				get = 0;
 		}
-		ferr("Dropped %d samples\n", i);
+		ol_err("Dropped %d samples\n", i);
 
 		pthread_mutex_lock(&ctx->a_buf_mutex);
 		ctx->a_buf_get = get;
@@ -751,7 +774,7 @@ void drop_audio(PlayerCtx *ctx, int by_pts)
 void drop_all_video(PlayerCtx *ctx)
 {
 	if (ctx->cur_frame && ctx->cur_frame->seekid == -ctx->cur_seekid) {
-		ferr("No more video (EOF)\n");
+		ol_err("No more video (EOF)\n");
 		return;
 	}
 	pthread_mutex_lock(&ctx->v_buf_mutex);
@@ -770,14 +793,14 @@ void drop_all_video(PlayerCtx *ctx)
 int next_video_frame(PlayerCtx *ctx)
 {
 	if (ctx->cur_frame && ctx->cur_frame->seekid == -ctx->cur_seekid) {
-		ferr("No more video (EOF)\n");
+		ol_err("No more video (EOF)\n");
 		return 0;
 	}
 	if (ctx->cur_frame)
 		ctx->last_frame_pts = ctx->cur_frame->pts;
 	pthread_mutex_lock(&ctx->v_buf_mutex);
 	while (ctx->v_buf_get == ctx->v_buf_put) {
-		ferr("Wait for video (pts %f)\n", ctx->cur_frame?ctx->cur_frame->pts:-1);
+		ol_err("Wait for video (pts %f)\n", ctx->cur_frame?ctx->cur_frame->pts:-1);
 		pthread_cond_wait(&ctx->v_buf_not_empty, &ctx->v_buf_mutex);
 		// HACK! This makes sure to flush stale stuff from the audio queue to
 		// avoid deadlocks while seeking
@@ -789,7 +812,7 @@ int next_video_frame(PlayerCtx *ctx)
 		ctx->last_frame_pts = -1;
 	ctx->cur_frame = ctx->v_bufs[ctx->v_buf_get];
 	ctx->cur_color_frame = ctx->c_bufs[ctx->v_buf_get];
-	fverbose("Get frame %d (pts: %f)\n", ctx->v_buf_get, ctx->cur_frame->pts);
+	ol_debug("Get frame %d (pts: %f)\n", ctx->v_buf_get, ctx->cur_frame->pts);
 	ctx->v_buf_get++;
 	if (ctx->v_buf_get == ctx->v_buf_len)
 		ctx->v_buf_get = 0;
@@ -815,13 +838,13 @@ void get_audio(float *lb, float *rb, int samples)
 	if (display_mode != PLAY)
 	{
 		if (display_mode == PAUSE) {
-			ferr("get_audio: paused\n");
+			ol_err("get_audio: paused\n");
 			if (!ctx->cur_frame) {
 				next_video_frame(ctx);
 			}
 			while (ctx->cur_frame->seekid != ctx->cur_seekid &&
 				   ctx->cur_frame->seekid != -ctx->cur_seekid) {
-				ferr("Drop audio due to seek\n");
+				ol_err("Drop audio due to seek\n");
 				drop_audio(ctx, 1);
 				next_video_frame(ctx);
 				drop_audio(ctx, 1);
@@ -832,7 +855,7 @@ void get_audio(float *lb, float *rb, int samples)
 				next_video_frame(ctx);
 				drop_audio(ctx, 1);
 			}
-			ferr("get_audio: pause complete\n");
+			ol_err("get_audio: pause complete\n");
 		}
 		memset(lb, 0, samples * sizeof(*lb));
 		memset(rb, 0, samples * sizeof(*rb));
@@ -848,7 +871,7 @@ void get_audio(float *lb, float *rb, int samples)
 		pthread_mutex_lock(&ctx->a_buf_mutex);
 		int have_samples = ctx->a_buf_put - ctx->a_buf_get;
 		if (!have_samples) {
-			ferr("Wait for audio\n");
+			ol_err("Wait for audio\n");
 			pthread_cond_wait(&ctx->a_buf_not_empty, &ctx->a_buf_mutex);
 			pthread_mutex_unlock(&ctx->a_buf_mutex);
 			continue;
@@ -882,7 +905,7 @@ void get_audio(float *lb, float *rb, int samples)
 		pthread_cond_signal(&ctx->a_buf_not_full);
 		pthread_mutex_unlock(&ctx->a_buf_mutex);
 
-		fverbose("Played %d samples, next pts %f\n", played, pts);
+		ol_debug("Played %d samples, next pts %f\n", played, pts);
 
 		while (1) {
 			if (!ctx->cur_frame) {
@@ -1001,7 +1024,7 @@ void *display_thread(void *arg)
 	params.max_framelen = 48000/20.0;
 
 	if(olInit(OL_FRAMES_BUF, 300000) < 0) {
-		ferr("OpenLase init failed\n");
+		ol_err("OpenLase init failed\n");
 		return NULL;
 	}
 
@@ -1009,7 +1032,7 @@ void *display_thread(void *arg)
 	float sample_aspect = av_q2d(ctx->v_stream->sample_aspect_ratio);
 	if (sample_aspect != 0)
 		aspect *= sample_aspect;
-	ferr("Aspect: %f\n", aspect);
+	ol_info("Aspect: %f\n", aspect);
 
 	float iaspect = 1/aspect;
 
@@ -1035,7 +1058,7 @@ void *display_thread(void *arg)
 	tparams.width = ctx->width;
 	tparams.height = ctx->height;
 
-	ferr("Resolution: %dx%d\n", ctx->width, ctx->height);
+	ol_info("Resolution: %dx%d\n", ctx->width, ctx->height);
 	olTraceInit(&trace_ctx, &tparams);
 
 	VideoFrame *last = NULL;
@@ -1086,7 +1109,7 @@ void *display_thread(void *arg)
 		olTranslate(-1.0f, 1.0f);
 
 		if (!ctx->cur_frame || ctx->cur_frame->seekid < 0) {
-			//ferr("Dummy frame\n");
+			//ol_err("Dummy frame\n");
 			float ftime = olRenderFrame(80);
 			pthread_mutex_lock(&ctx->display_mode_mutex);
 			display_mode = ctx->display_mode;
@@ -1142,9 +1165,9 @@ void *display_thread(void *arg)
 			tparams.height = ctx->cur_frame->height;
 			olTraceReInit(trace_ctx, &tparams);
 			olTraceFree(&result);
-			//ferr("Trace\n");
+			//ol_err("Trace\n");
 			olTrace(trace_ctx, ctx->cur_frame->data, ctx->cur_frame->stride, &result);
-			//ferr("Trace done\n");
+			//ol_err("Trace done\n");
 			inf++;
 			last = ctx->cur_frame;
 		}
@@ -1223,14 +1246,14 @@ void *display_thread(void *arg)
 		olGetFrameInfo(&info);
 		frames++;
 		time += ftime;
-		fverbose("Frame time: %.04f, Cur FPS:%6.02f, Avg FPS:%6.02f, Drift: %7.4f, In %4d, Out %4d Thr %3d/%3d Bg %3d Pts %4d",
+		ol_debug("Frame time: %.04f, Cur FPS:%6.02f, Avg FPS:%6.02f, Drift: %7.4f, In %4d, Out %4d Thr %3d/%3d Bg %3d Pts %4d",
                  ftime, 1/ftime, frames/time, 0.0, inf, frames,
                  tparams.threshold, tparams.threshold2, 0, info.points);
 		if (info.resampled_points)
-			fverbose(" Rp %4d Bp %4d", info.resampled_points, info.resampled_blacks);
+			ol_debug(" Rp %4d Bp %4d", info.resampled_points, info.resampled_blacks);
 		if (info.padding_points)
-			fverbose(" Pad %4d", info.padding_points);
-		fverbose("\n");
+			ol_debug(" Pad %4d", info.padding_points);
+		ol_debug("\n");
 		deliver_event(ctx, time, ftime, frames, 0);
 
 		pthread_mutex_lock(&ctx->display_mode_mutex);
@@ -1358,6 +1381,7 @@ void playvid_seek(PlayerCtx *ctx, double pos)
 
 void loadDefaults(PlayerSettings *settings)
 {
+	settings->canny = 1;
 	settings->splitthreshold = 0;
 	settings->blur = 100;
 	settings->scale = 100;
@@ -1367,7 +1391,6 @@ void loadDefaults(PlayerSettings *settings)
 	settings->lightval = 160;
 	settings->offset = 0;
 	settings->decimation = 3;
-	settings->color_decimation = 1;
 	settings->minsize = 10;
 	settings->startwait = 8;
 	settings->endwait = 3;
@@ -1377,22 +1400,22 @@ void loadDefaults(PlayerSettings *settings)
 	settings->minrate = 15;
 	settings->overscan = 0;
 	settings->volume = 50;
+
+    settings->color_decimation = 1;
 }
 
 void loadBadAppleColor(PlayerSettings *settings)
 {
     settings->canny = 1;
     settings->splitthreshold = 1;
-    settings->volume = 100;
-    settings->scale = 100;
     settings->blur = 120;  // 150 - 250
+    settings->scale = 100;
     settings->threshold = 30;
     settings->threshold2 = 100;
     settings->darkval = 0;
     settings->lightval = 0;
     settings->offset = 0;
     settings->decimation = 3; // 1-3
-    settings->color_decimation = 1;
     settings->minsize = 20;
     settings->startwait = 20;
     settings->endwait = 0;
@@ -1401,13 +1424,128 @@ void loadBadAppleColor(PlayerSettings *settings)
     settings->snap = 10;
     settings->minrate = 15; // decimation を低く、minrate を上げる方が効果的
     settings->overscan = 0;
+    settings->volume = 100;
+
+    settings->color_decimation = 1;
+}
+
+void print_settings(PlayerSettings *settings)
+{
+	ol_verbose("canny = %d\n", settings->canny);
+	ol_verbose("splitthreshold = %d\n", settings->splitthreshold);
+	ol_verbose("volume = %d\n", settings->volume);
+	ol_verbose("scale = %d\n", settings->scale);
+	ol_verbose("blur = %d\n", settings->blur);
+	ol_verbose("threshold = %d\n", settings->threshold);
+	ol_verbose("threshold2 = %d\n", settings->threshold2);
+	ol_verbose("darkval = %d\n", settings->darkval);
+	ol_verbose("lightval = %d\n", settings->lightval);
+	ol_verbose("offset = %d\n", settings->offset);
+	ol_verbose("decimation = %d\n", settings->decimation);
+	ol_verbose("color_decimation = %d\n", settings->color_decimation);
+	ol_verbose("minsize = %d\n", settings->minsize);
+	ol_verbose("startwait = %d\n", settings->startwait);
+	ol_verbose("endwait = %d\n", settings->endwait);
+	ol_verbose("dwell = %d\n", settings->dwell);
+	ol_verbose("offspeed = %d\n", settings->offspeed);
+	ol_verbose("snap = %d\n", settings->snap);
+	ol_verbose("minrate = %d\n", settings->minrate);
+	ol_verbose("overscan = %d\n", settings->overscan);
+}
+
+int load_settings(const char *filename, PlayerSettings *settings)
+{
+    FILE* file;
+    char buffer[CONFIG_LINE_BUFFER_SIZE];
+
+    printf("Loading %s...\n", filename);
+    file = fopen(filename, "rt");
+    if (file == NULL) {
+        printf("Can not open %s\n", filename);
+        return -1;
+    }
+
+    while(fgets(buffer, CONFIG_LINE_BUFFER_SIZE, file)) {
+        // chomp
+        char *p;
+        p = buffer + strlen(buffer) - 1;
+        while (p >= buffer && (*p == '\n' || *p == '\r'))
+            *p-- = 0;
+
+        char key[CONFIG_LINE_BUFFER_SIZE];
+        char val[CONFIG_LINE_BUFFER_SIZE];
+
+        strcpy(key, strtok(buffer, "="));
+        if (key == NULL) {
+            printf("error: bad config line: '%s'\n", buffer);
+            continue;
+        }
+
+        strcpy(val, strtok(NULL, ","));
+        if (val == NULL) {
+            printf("error: bad config line: '%s'\n", buffer);
+            continue;
+        }
+
+        char intval = atoi(val);
+        //printf("got: %s=%d\n", key, intval);
+
+        if (strcmp(key, "canny") == 0) {
+            settings->canny = intval;
+        } else if (strcmp(key, "splitthreshold") == 0) {
+            settings->splitthreshold = intval;
+        } else if (strcmp(key, "blur") == 0) {
+            settings->blur = intval;
+        } else if (strcmp(key, "scale") == 0) {
+            settings->scale = intval;
+        } else if (strcmp(key, "threshold") == 0) {
+            settings->threshold = intval;
+        } else if (strcmp(key, "threshold2") == 0) {
+            settings->threshold2 = intval;
+        } else if (strcmp(key, "darkval") == 0) {
+            settings->darkval = intval;
+        } else if (strcmp(key, "lightval") == 0) {
+            settings->lightval = intval;
+        } else if (strcmp(key, "offset") == 0) {
+            settings->offset = intval;
+        } else if (strcmp(key, "decimation") == 0) {
+            settings->decimation = intval;
+        } else if (strcmp(key, "minsize") == 0) {
+            settings->minsize = intval;
+        } else if (strcmp(key, "startwait") == 0) {
+            settings->startwait = intval;
+        } else if (strcmp(key, "endwait") == 0) {
+            settings->endwait = intval;
+        } else if (strcmp(key, "dwell") == 0) {
+            settings->dwell = intval;
+        } else if (strcmp(key, "offspeed") == 0) {
+            settings->offspeed = intval;
+        } else if (strcmp(key, "snap") == 0) {
+            settings->snap = intval;
+        } else if (strcmp(key, "minrate") == 0) {
+            settings->minrate = intval;
+        } else if (strcmp(key, "overscan") == 0) {
+            settings->overscan = intval;
+        } else if (strcmp(key, "volume") == 0) {
+            settings->volume = intval;
+		} else {
+            printf("error: Unknown setting property name '%s'", key);
+		}
+	}
+
+    fclose(file);
+
+    return 0;
 }
 
 void usage(const char *argv0)
 {
-	printf("Usage: %s [options] inputfile\n\n", argv0);
-	printf("Options:\n");
-	printf("-q        Quiet mode\n");
+	fprintf(stderr, "Usage: %s [options] inputfile\n\n", argv0);
+	fprintf(stderr, "Options:\n");
+	fprintf(stderr, "  -h|?          Help\n");
+	fprintf(stderr, "  -q            Decrease verbosity (max -qq)\n");
+	fprintf(stderr, "  -v            Increase verbosity (max -vvv)\n");
+	fprintf(stderr, "  -c FILENAME   Config\n");
 }
 
 int main(int argc, char** argv)
@@ -1415,20 +1553,25 @@ int main(int argc, char** argv)
     PlayerCtx *ctx;
 	const char* input_filename;
     char optchar;
+    char *opt_config = NULL;
 
-	while ((optchar = getopt(argc, argv, "hq")) != -1) {
+	while ((optchar = getopt(argc, argv, "hqvc:")) != -1) {
 		switch (optchar) {
 			case 'h':
 			case '?':
 				usage(argv[0]);
 				return 0;
 			case 'q':
-				opt_quiet = 1;
+				opt_verbose -= 1;
+				break;
+			case 'v':
+				opt_verbose += 1;
+				break;
+			case 'c':
+				opt_config = strdup(optarg);
 				break;
 		}
 	}
-
-	playvid_init();
 
 	if (optind == argc) {
 		usage(argv[0]);
@@ -1441,22 +1584,31 @@ int main(int argc, char** argv)
 
 	playvid_init();
 	playvid_open(&ctx, input_filename);
-    //loadDefaults(&ctx->settings);
-    loadBadAppleColor(&ctx->settings);
+
+    /* Reset to default parameters */
+    loadDefaults(&ctx->settings);
+    //loadBadAppleColor(&ctx->settings);
+
+    /* Load configuration */
+    if (opt_config != NULL) {
+        load_settings(opt_config, &ctx->settings);
+    }
+
+    print_settings(&ctx->settings);
 
 	playvid_play(ctx);
 
     for (int i = 0; i < 2000; i++) {
         pthread_mutex_lock(&ctx->seek_mutex);
         if (ctx->eof) {
-            ferr("player: got EOF");
+            ol_err("player: got EOF");
             ctx->exit = 1;
             sleep_millis(1000);
             break;
         }
         pthread_mutex_unlock(&ctx->seek_mutex);
 
-        fverbose("loop %d\n", i);
+        ol_verbose("loop %d\n", i);
         sleep_millis(1000);
     }
 }

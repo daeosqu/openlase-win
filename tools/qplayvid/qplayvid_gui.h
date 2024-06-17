@@ -29,6 +29,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include <QRadioButton>
 #include <QCheckBox>
 #include <QLabel>
+#include <QGridLayout>
 #include <qcoreevent.h>
 
 class PlayerSetting : public QObject
@@ -101,6 +102,11 @@ private:
 	QLabel *sb_points;
 	QLabel *sb_pts;
 
+	QGridLayout *previewbox;
+	QList<QLabel *> preview_widgets;
+	QCheckBox *c_preview;
+	QCheckBox *c_preview_debug;
+
 	QLayout *addSetting(PlayerSetting *setting);
 	PlayerSetting *findSetting(const QString &name);
 	void loadDefaults(void);
@@ -111,6 +117,7 @@ private slots:
 	void splitChanged();
 	void updateSettings();
 	void updateSettingsUI();
+	void updatePreview();
 	void playStopClicked();
 	void pauseToggled(bool pause);
 	void stepClicked();
@@ -119,6 +126,7 @@ private slots:
 	void timeMoved(int value);
 	void loadSettings();
 	void saveSettings();
+	void previewDebugChanged();
 };
 
 void player_event_cb(PlayerEvent *ev);

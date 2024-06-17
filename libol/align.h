@@ -20,7 +20,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #ifndef ALIGN_H
 #define ALIGN_H
 
-#include "config.h"
+#include "libol/libol_config.h"
 
 #include <assert.h>
 #include <stdlib.h>

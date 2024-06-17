@@ -17,13 +17,17 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
-#ifndef TEXT_H
-#define TEXT_H
+#ifndef LIBOL_TEXT_H
+#define LIBOL_TEXT_H
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <stdint.h>
 #include <stddef.h>
 
-#include "libol_common.h"
+#include "libol/libol_export.h"
 
 typedef struct {
 	int flag;
@@ -42,11 +46,15 @@ typedef struct {
 	const FontChar *chars;
 } Font;
 
-OL_EXPORT Font *olGetDefaultFont(void);
-OL_EXPORT float olGetCharWidth(Font *fnt, int c);
-OL_EXPORT float olGetStringWidth(Font *fnt, float height, const char *s);
-OL_EXPORT float olGetCharOverlap(Font *font, float height);
-OL_EXPORT float olDrawChar(Font *fnt, float x, float y, float height, uint32_t color, int c);
-OL_EXPORT float olDrawString(Font *fnt, float x, float y, float height, uint32_t color, const char *s);
+LIBOL_EXPORT Font *olGetDefaultFont(void);
+LIBOL_EXPORT float olGetCharWidth(Font *fnt, int c);
+LIBOL_EXPORT float olGetStringWidth(Font *fnt, float height, const char *s);
+LIBOL_EXPORT float olGetCharOverlap(Font *font, float height);
+LIBOL_EXPORT float olDrawChar(Font *fnt, float x, float y, float height, uint32_t color, int c);
+LIBOL_EXPORT float olDrawString(Font *fnt, float x, float y, float height, uint32_t color, const char *s);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

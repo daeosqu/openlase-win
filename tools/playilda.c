@@ -33,7 +33,7 @@ the laser image updates.
 
 #define _BSD_SOURCE
 
-#include "ol_compat.h"
+#include "libol/libol_compat.h"
 
 #include <stdio.h>
 #include <errno.h>
@@ -57,7 +57,7 @@ static inline uint16_t swapshort(uint16_t v) {
 #endif
 
 #include <stdint.h>
-#include "ilda.h"
+#include "libol/ilda.h"
 
 typedef jack_default_audio_sample_t sample_t;
 typedef jack_nframes_t nframes_t;

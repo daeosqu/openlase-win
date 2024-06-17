@@ -29,7 +29,7 @@ if(CURSES_FOUND AND FFMPEG_FOUND AND BUILD_TRACER)
   target_compile_definitions(slides PRIVATE -DPDC_DLL_BUILD)
   target_include_directories(slides PRIVATE ${CMAKE_SOURCE_DIR}/tools ${FFMPEG_INCLUDE_DIRS} ${CURSES_INCLUDE_DIR})
   target_link_directories(slides PRIVATE ${FFMPEG_LIBRARY_DIRS})
-  target_link_libraries(slides ol ${FFMPEG_LIBRARIES} ${CURSES_LIBRARY})
+  target_link_libraries(slides OpenLase::LibOL ${FFMPEG_LIBRARIES} ${CURSES_LIBRARY})
 
   function(svg2ild NAME)
     add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${NAME}.ild
@@ -44,9 +44,9 @@ if(CURSES_FOUND AND FFMPEG_FOUND AND BUILD_TRACER)
   svg2ild(jack-logo)
   svg2ild(output)
 
-  install(TARGETS harp RUNTIME DESTINATION bin)
+  install(TARGETS harp RUNTIME DESTINATION bin COMPONENT Applications)
   foreach(name openlase-logo 27c3-logo jack-logo output)
-     install(FILES ${CMAKE_CURRENT_BINARY_DIR}/${name}.ild DESTINATION bin)
+     install(FILES ${CMAKE_CURRENT_BINARY_DIR}/${name}.ild DESTINATION bin COMPONENT Applications)
   endforeach()
 
 else()

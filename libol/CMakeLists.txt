@@ -16,19 +16,71 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #
 
-include(CheckIncludeFile)
+#################
+##  Variables  ##
+#################
 
-check_include_file(malloc.h HAVE_MALLOC_H)
-check_symbol_exists(memalign malloc.h HAVE_MEMALIGN)
-check_symbol_exists(posix_memalign stdlib.h HAVE_POSIX_MEMALIGN)
-check_symbol_exists(_aligned_malloc malloc.h HAVE_ALIGNED_MALLOC)
-configure_file(${CMAKE_CURRENT_SOURCE_DIR}/config.h.in ${CMAKE_CURRENT_BINARY_DIR}/config.h)
+set(LIBRARY_NAMESPACE "${PROJECT_NAME}")
+set(LIBRARY_VERSION "0.0.2.1")
+set(LIBRARY_TARGET_NAME LibOL)
+set(LIBRARY_INCLUDE_DIRECTORY_NAME libol)
+set(LIBRARY_OUTPUT_NAME ol)
+set(export_h_prefix "LIBOL")
 
-include_directories (${CMAKE_SOURCE_DIR}/include ${CMAKE_CURRENT_BINARY_DIR}
-	${JACK_INCLUDE_DIR})
+if(MSVC AND NOT BUILD_SHARED_LIBS)
+  set(LIBRARY_OUTPUT_NAME "${LIBRARY_OUTPUT_NAME}_static")
+endif()
+set(${LIBRARY_TARGET_NAME}_SRC
+  ${CMAKE_CURRENT_SOURCE_DIR}/libol.c
+  ${CMAKE_CURRENT_SOURCE_DIR}/text.c
+  ${CMAKE_CURRENT_SOURCE_DIR}/ilda.c
+  ${CMAKE_CURRENT_BINARY_DIR}/fontdef.c
+)
+set(${LIBRARY_TARGET_NAME}_HDR
+  ${CMAKE_CURRENT_SOURCE_DIR}/include/libol/ilda.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/include/libol/libol.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/include/libol/libol_compat.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/include/libol/text.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/include/libol/trace.h
+  ${CMAKE_CURRENT_BINARY_DIR}/include/libol/libol_export.h
+  ${CMAKE_CURRENT_BINARY_DIR}/include/libol/libol_config.h
+)
 
-if(MSVC)
-	add_definitions(-DBUILD_LIBOL_DLL)
+###############
+##  Options  ##
+###############
+
+option(LIBOL_INCLUDE_PACKAGING "Include packaging rules for libol" YES)
+
+################
+##  Packages  ##
+################
+
+find_package(JACK REQUIRED)
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
+
+###############
+##  Library  ##
+###############
+
+add_library(${LIBRARY_TARGET_NAME})
+add_library(${LIBRARY_NAMESPACE}::${LIBRARY_TARGET_NAME}
+  ALIAS ${LIBRARY_TARGET_NAME})
+
+##############
+##  Tracer  ##
+##############
+
+# for YASM
+if(CMAKE_SIZEOF_VOID_P EQUAL 8)
+  set(BITS 64)
+else()
+  set(BITS 32)
+endif()
+
+if(NOT DEFINED BUILD_TRACER)
+  # Should be "Y" or not
+  set(BUILD_TRACER "Y" CACHE BOOL "Build the image tracer (x86 only)" FORCE)
 endif()
 
 set(TRACER_SOURCES "")
@@ -42,13 +94,13 @@ if(BUILD_TRACER)
 		  NAMES yasm yasm-1.2.0-win32 yasm-1.2.0-win64
 		  HINTS $ENV{YASM_ROOT} ${YASM_ROOT}
 		  PATH_SUFFIXES bin
-		  )
+		)
 	  if(YASM_EXECUTABLE)
 		  execute_process(COMMAND ${YASM_EXECUTABLE} --version
 			  OUTPUT_VARIABLE yasm_version
 			  ERROR_QUIET
 			  OUTPUT_STRIP_TRAILING_WHITESPACE
-			  )
+			)
 		  if(yasm_version MATCHES "^yasm ([0-9\\.]*)")
 			  set(YASM_VERSION_STRING "${CMAKE_MATCH_1}")
 		  endif()
@@ -102,14 +154,66 @@ else()
   message(STATUS "Will NOT build tracer")
 endif()
 
-add_library (ol SHARED libol.c text.c ilda.c ${TRACER_SOURCES} ${CMAKE_CURRENT_BINARY_DIR}/fontdef.c)
-target_compile_definitions(ol PRIVATE BUILD_LIBOL_DLL)
-target_link_libraries (ol ${CMAKE_THREAD_LIBS_INIT} ${MATH_LIBRARY} ${JACK_LIBRARIES} ${COMPILED_YASM_OBJS})
-set_target_properties(ol PROPERTIES VERSION 0 SOVERSION 0)
+# Compiler options
+target_compile_features(${LIBRARY_TARGET_NAME} PUBLIC cxx_std_11)
+target_compile_definitions(${LIBRARY_TARGET_NAME} PUBLIC "$<$<NOT:$<BOOL:${BUILD_SHARED_LIBS}>>:${export_h_prefix}_STATIC_DEFINE>")
+
+target_include_directories(${LIBRARY_TARGET_NAME}
+  PRIVATE
+  "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>"
+  "$<BUILD_INTERFACE:${JACK_INCLUDE_DIR}>"
+  PUBLIC
+  "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
+  "$<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>"
+  "$<INSTALL_INTERFACE:include>"
+)
+
+target_link_libraries(${LIBRARY_TARGET_NAME} PUBLIC Jack::Jack ${MATH_LIBRARY} PRIVATE ${CMAKE_THREAD_LIBS_INIT} ${COMPILED_YASM_OBJS})
+
+set_target_properties(${LIBRARY_TARGET_NAME} PROPERTIES
+  OUTPUT_NAME "${LIBRARY_OUTPUT_NAME}")
+
+set_target_properties(${LIBRARY_TARGET_NAME} PROPERTIES
+  DEBUG_POSTFIX "${CMAKE_DEBUG_POSTFIX}")
+
+set_target_properties(${LIBRARY_TARGET_NAME} PROPERTIES
+  POSITION_INDEPENDENT_CODE ON)
+
+target_include_directories(${LIBRARY_TARGET_NAME}
+  PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
+  "$<INSTALL_INTERFACE:$<INSTALL_PREFIX>/${CMAKE_INSTALL_INCLUDEDIR}>")
+
+target_sources(${LIBRARY_TARGET_NAME}
+  PRIVATE "${${LIBRARY_TARGET_NAME}_SRC}"
+  PRIVATE "${TRACER_SOURCES}")
+
+set_target_properties(${LIBRARY_TARGET_NAME} PROPERTIES
+  VERSION "${LIBRARY_VERSION}"
+  PUBLIC_HEADER "${${LIBRARY_TARGET_NAME}_HDR}")
+
+# libol_export.h
+
+generate_export_header(${LIBRARY_TARGET_NAME} EXPORT_FILE_NAME ./include/libol/libol_export.h)
+
+# libol_config.h
+
+check_include_file(malloc.h HAVE_MALLOC_H)
+check_symbol_exists(memalign malloc.h HAVE_MEMALIGN)
+check_symbol_exists(posix_memalign stdlib.h HAVE_POSIX_MEMALIGN)
+check_symbol_exists(_aligned_malloc malloc.h HAVE_ALIGNED_MALLOC)
+configure_file(./include/libol/libol_config.h.in ./include/libol/libol_config.h @ONLY)
+
+# fontdef.c
 
 add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/fontdef.c
-    DEPENDS ${CMAKE_SOURCE_DIR}/tools/genfont.py
-    MAIN_DEPENDENCY laserfont.svg
-    COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/genfont.py ${CMAKE_CURRENT_SOURCE_DIR}/laserfont.svg ${CMAKE_CURRENT_BINARY_DIR}/fontdef.c default_font)
+  DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/genfont.py
+  MAIN_DEPENDENCY laserfont.svg
+  COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/genfont.py ${CMAKE_CURRENT_SOURCE_DIR}/laserfont.svg ${CMAKE_CURRENT_BINARY_DIR}/fontdef.c default_font)
 
-install(TARGETS ol LIBRARY DESTINATION ${CMAKE_INSTALL_PREFIX}/lib)
+#################
+##  Packaging  ##
+#################
+
+if (LIBOL_INCLUDE_PACKAGING)
+  add_subdirectory(packaging)
+endif ()

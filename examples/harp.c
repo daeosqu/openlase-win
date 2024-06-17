@@ -19,8 +19,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 
 // This is the laser harp projection, which is just a simple OpenLase app */
 
-#include "libol.h"
-#include "ol_compat.h"
+#include "libol/libol.h"
 
 #include <stdio.h>
 #include <errno.h>
