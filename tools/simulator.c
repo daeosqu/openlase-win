@@ -40,11 +40,13 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include <getopt.h>
 #endif
 
-#define DEFAULT_FRAMERATE 60
+#define DEFAULT_FRAMERATE 30
 
 float framerate = DEFAULT_FRAMERATE;
 
 int window;
+
+int decimation = 1;
 
 jack_client_t *client;
 
@@ -82,23 +84,23 @@ int opt_verbose = 0;
 int opt_fullscreen = 0;
 
 int my_fprintf(FILE *stream, const char *format, ...) {
-    va_list args;
-    int result = 0;
-    va_start(args, format);
-    if (!opt_quiet)
-        result = vfprintf(stream, format, args);
-    va_end(args);
-    return result;
+	va_list args;
+	int result = 0;
+	va_start(args, format);
+	if (!opt_quiet)
+		result = vfprintf(stream, format, args);
+	va_end(args);
+	return result;
 }
 
 int my_printf(const char *format, ...) {
-    va_list args;
-    int result = 0;
-    va_start(args, format);
-    if (!opt_quiet)
-        result = vprintf(format, args);
-    va_end(args);
-    return result;
+	va_list args;
+	int result = 0;
+	va_start(args, format);
+	if (!opt_quiet)
+		result = vprintf(format, args);
+	va_end(args);
+	return result;
 }
 
 #define real_printf printf
@@ -108,6 +110,11 @@ int my_printf(const char *format, ...) {
 
 static int process (nframes_t nframes, void *arg)
 {
+	static int frame_counter = 0;
+	static float smoothed_x = 0.0f;
+	static float smoothed_y = 0.0f;
+	const float alpha = 0.5f; // スムージング係数
+
 	sample_t *i_x = (sample_t *) jack_port_get_buffer (in_x, nframes);
 	sample_t *i_y = (sample_t *) jack_port_get_buffer (in_y, nframes);
 	sample_t *i_r = (sample_t *) jack_port_get_buffer (in_r, nframes);
@@ -116,8 +123,31 @@ static int process (nframes_t nframes, void *arg)
 
 	nframes_t frm;
 	for (frm = 0; frm < nframes; frm++) {
-		buffer[buf_widx].x = *i_x++;
-		buffer[buf_widx].y = *i_y++;
+		frame_counter++;
+		if (decimation > 1 && (frame_counter % decimation) != 0) {
+			// スキップするフレームのデータは読み飛ばす
+			i_x++;
+			i_y++;
+			i_r++;
+			i_g++;
+			i_b++;
+			continue;
+		}
+
+		float current_x = *i_x++;
+		float current_y = *i_y++;
+
+		if (decimation >= 2) {
+			// スムージングを適用
+			smoothed_x = alpha * current_x + (1.0f - alpha) * smoothed_x;
+			smoothed_y = alpha * current_y + (1.0f - alpha) * smoothed_y;
+			buffer[buf_widx].x = smoothed_x;
+			buffer[buf_widx].y = smoothed_y;
+		} else {
+			buffer[buf_widx].x = current_x;
+			buffer[buf_widx].y = current_y;
+		}
+
 		buffer[buf_widx].r = *i_r++;
 		buffer[buf_widx].g = *i_g++;
 		buffer[buf_widx].b = *i_b++;
@@ -196,35 +226,35 @@ void draw_gl(void)
 #define TV_GETTIMEOFDAY(a) timespec_get(a, TIME_UTC)
 #define TV_DIFF(a, b) (a.tv_sec - b.tv_sec + (double)(a.tv_nsec - b.tv_nsec) / 1000000000)
 
-    static struct TV_TIMEVAL last_time_short = { 0, 0 };
-    static struct TV_TIMEVAL last_warned = { 0, 0 };
-    struct TV_TIMEVAL tv;
-    static double fps = 0;
-    static int old_fno = 0;
-    double diff_time;
+	static struct TV_TIMEVAL last_time_short = { 0, 0 };
+	static struct TV_TIMEVAL last_warned = { 0, 0 };
+	struct TV_TIMEVAL tv;
+	static double fps = 0;
+	static int old_fno = 0;
+	double diff_time;
 
-    if (last_time_short.tv_sec == 0) {
-        TV_GETTIMEOFDAY(&last_time_short);
-    }
-    TV_GETTIMEOFDAY(&tv);
-    diff_time = TV_DIFF(tv, last_time_short);
+	if (last_time_short.tv_sec == 0) {
+		TV_GETTIMEOFDAY(&last_time_short);
+	}
+	TV_GETTIMEOFDAY(&tv);
+	diff_time = TV_DIFF(tv, last_time_short);
 
-    if (diff_time > 1.0) {
-        fps = (fno - old_fno) / diff_time;
-        last_time_short = tv;
-        old_fno = fno;
+	if (diff_time > 1.0) {
+		fps = (fno - old_fno) / diff_time;
+		last_time_short = tv;
+		old_fno = fno;
 
-        if (opt_verbose)
-            fprintf(stderr, "FPS: %.1f\n", fps);
+		if (opt_verbose)
+			fprintf(stderr, "FPS: %.1f\n", fps);
 
-        double ratio = opt_verbose ? 0.1 : 0.5;
-        double minimum_fps = framerate * (1.0 - ratio);
-        double diff_time_warned = TV_DIFF(tv, last_warned);
-        if (diff_time_warned > 1.0 && fps < minimum_fps) {
-            fprintf(stderr, "warning: frame rate slowdown: %.1f < %d - %.1f%\n", fps, (int)framerate, ratio * 100);
-            last_warned = tv;
-        }
-    }
+		double ratio = opt_verbose ? 0.1 : 0.5;
+		double minimum_fps = framerate * (1.0 - ratio);
+		double diff_time_warned = TV_DIFF(tv, last_warned);
+		if (diff_time_warned > 1.0 && fps < minimum_fps) {
+			fprintf(stderr, "warning: frame rate slowdown: %.1f < %d - %.1f%%\n", fps, (int)framerate, ratio * 100);
+			last_warned = tv;
+		}
+	}
 
 #endif /* SHOW_FPS */
 
@@ -278,10 +308,10 @@ void draw_gl(void)
 		if (dfactor > 0.5)
 			dfactor = 0.5;
 #else
-        // I like more brightness
-        float dfactor = 0.5/d;
-        if (dfactor > 0.9)
-            dfactor = 0.9;
+		// I like more brightness
+		float dfactor = 0.5/d;
+		if (dfactor > 0.9)
+			dfactor = 0.9;
 #endif
 
 		int age = hist_samples-i;
@@ -367,11 +397,12 @@ void gl_timer(int arg)
 void usage(const char *argv0)
 {
 	real_printf("Usage: %s [options]\n\n", argv0);
+	real_printf("  -d INTEGER  Decimation factor [1-256] (default: 1)\n");
 	real_printf("Options:\n");
 	real_printf("-v          Verbose mode\n");
 	real_printf("-q          Very quietly mode\n");
 	real_printf("-r FLOAT    Maximum Framerate (default: %d)\n", DEFAULT_FRAMERATE);
-	real_printf("-s INTEGER  Histgram Samples [%d-%d] (default: %d)\n", MIN_HIST_SAMPLES, MAX_HIST_SAMPLES, DEFAULT_FRAMERATE);
+	real_printf("-s INTEGER  Histgram Samples [%d-%d] (default: %d)\n", MIN_HIST_SAMPLES, MAX_HIST_SAMPLES, DEFAULT_HIST_SAMPLES);
 }
 
 int main (int argc, char *argv[])
@@ -383,43 +414,50 @@ int main (int argc, char *argv[])
 	setvbuf(stdout, NULL, _IONBF, 0);
 	setvbuf(stderr, NULL, _IONBF, 0);
 
-	while ((optchar = getopt(argc, argv, "h?vqFr:s:")) != -1) {
+	while ((optchar = getopt(argc, argv, "h?vqFr:s:d:")) != -1) {
 		switch (optchar) {
 			case 'h':
 			case '?':
 				usage(argv[0]);
 				return 0;
 			case 'q':
-                opt_quiet = 1;
-                break;
+				opt_quiet = 1;
+				break;
 			case 'v':
-                opt_verbose = 1;
+				opt_verbose = 1;
 				break;
 			case 'F':
-                opt_fullscreen = 1;
+				opt_fullscreen = 1;
 				break;
 			case 'r':
 				framerate = atof(optarg);
 				break;
 			case 's':
 				hist_samples = atoi(optarg);
-                if (hist_samples < MIN_HIST_SAMPLES)
-                    hist_samples = MIN_HIST_SAMPLES;
-                if (hist_samples > MAX_HIST_SAMPLES)
-                    hist_samples = MAX_HIST_SAMPLES;
+				if (hist_samples < MIN_HIST_SAMPLES)
+					hist_samples = MIN_HIST_SAMPLES;
+				if (hist_samples > MAX_HIST_SAMPLES)
+					hist_samples = MAX_HIST_SAMPLES;
+				break;
+			case 'd':
+				decimation = atoi(optarg);
+				if (decimation < 1)
+					decimation = 1;
+				if (decimation > 256)
+					decimation = 256;
 				break;
 		}
 	}
 
-    buf_samples = hist_samples + 48000;
+	buf_samples = hist_samples + 48000;
 
 	if (optind != argc) {
 		usage(argv[0]);
 		return 1;
 	}
 
-    if (opt_verbose)
-        fprintf (stderr, "GL frame rate: %.1f FPS\n", framerate);
+	if (opt_verbose)
+		fprintf (stderr, "GL frame rate: %.1f FPS\n", framerate);
 
 	glutInit(&argc, argv);
 
@@ -429,8 +467,8 @@ int main (int argc, char *argv[])
 
 	window = glutCreateWindow("OpenLase Simulator");
 
-    if (opt_fullscreen)
-        glutFullScreen();
+	if (opt_fullscreen)
+		glutFullScreen();
 
 	glutDisplayFunc(&draw_gl);
 	glutTimerFunc(0, &gl_timer, 0);
@@ -462,4 +500,3 @@ int main (int argc, char *argv[])
 	glutMainLoop();
 	return 0;
 }
-

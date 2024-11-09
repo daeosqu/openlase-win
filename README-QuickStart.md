@@ -170,6 +170,8 @@ qplayvid $HOME/.cache/openlase/bad_apple.mp4
 
 OpenLase の python バインディングを使ったサンプルを実行します。
 
+NOTE: Python3.8 以降は DLL 探索に環境変数 PATH を使用しません。pylase のロードの前に `os.add_dll_directory("C:\\windows")` とするか、jack.dll を `C:\Program Files\openlase-x.x.x\bin` にコピーします(読み込まれる pylase.cp311-win_amd64.pyd と同じディレクトリ)。
+
 ```
 python "C:\Program Files\openlase\bin\simple.py"
 ```

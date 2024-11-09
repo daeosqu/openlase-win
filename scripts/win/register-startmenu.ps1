@@ -24,7 +24,6 @@ param (
 )
 
 Set-StrictMode -Version Latest
-$ErrorActionPreference = "Stop"
 
 if ($allusers) {
     $data_dir = $env:ProgramData
@@ -32,25 +31,38 @@ if ($allusers) {
     $data_dir = $env:APPDATA
 }
 
-$script_dir = Resolve-Path "$PSScriptRoot\..\.."
-$work_dir = $script_dir
+$ol_dir = (Resolve-Path -Path "$PSScriptRoot\..\..").Path
 
-if (Test-Path "$script_dir\res\laser.ico") {
-    $root_dir = Resolve-Path "$script_dir"
+if (Test-Path "$ol_dir\res\laser.ico") {
+    # C:\repos\openlase-win\scripts\win\register-startmenu.ps1
+    $cmd = Resolve-Path "$ol_dir\openlase.cmd"
+    $ico = Resolve-Path "$ol_dir\res\laser.ico"
+    $version_file = "$ol_dir\VERSION"
+    $work_dir = $ol_dir
 } else {
-    $root_dir = Resolve-Path "$script_dir\.."
+    # C:\Program Files\OpenLase\bin\scripts\win\register-startmenu.ps1
+    $ol_dir = (Resolve-Path -Path "$PSScriptRoot\..\..\..").Path
+    $cmd = Resolve-Path "$ol_dir\bin\openlase.cmd"
+    $ico = Resolve-Path "$ol_dir\share\openlase\laser.ico"
+    $version_file = "$ol_dir\share\openlase\VERSION"
+    $work_dir = $ol_dir
 }
 
-$ico = Resolve-Path "$root_dir\share\openlase\laser.ico"
+echo "ol_dir: $ol_dir"
+echo "cmd: $cmd"
+echo "ico: $ico"
+echo "version_file: $version_file"
+echo "work_dir: $work_dir"
+echo "data_dir: $data_dir"
 
-$version = (Select-String -Path "$root_dir\share\openlase\VERSION" "(OpenLase)? *([a-zA-Z0-9._-]+)" | Select -First 1 | % { $_.matches.groups[2].value -split '\.' } | Select-Object -First 3) -join "."
+$version = (Select-String -Path "$version_file" "(OpenLase)? *([a-zA-Z0-9._-]+)" | Select -First 1 | % { $_.matches.groups[2].value -split '\.' } | Select-Object -First 3) -join "."
 $menu_dir = $data_dir + "\Microsoft\Windows\Start Menu\Programs"
 
-if (Test-Path $script_dir\.git) {
+if (Test-Path $ol_dir\.git) {
     $name = "${name}-dev"
-    $cmd = Resolve-Path "$script_dir\openlase.cmd"
+    $work_dir = $ol_dir
 } else {
-    $cmd = Resolve-Path "$script_dir\openlase.cmd"
+    $work_dir = $env:USERPROFILE
 }
 
 if ($uninstall) {
@@ -63,4 +75,3 @@ if ($allusers) {
     # Update start menu
     Restart-Service WSearch -Force
 }
-

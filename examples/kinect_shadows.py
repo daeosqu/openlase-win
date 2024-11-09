@@ -17,12 +17,18 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 
-import pylase as ol
 import threading
 import time
-import numpy as np
-import freenect
 import sys
+
+import freenect
+import numpy as np
+
+if os.name == 'nt':
+    os.add_dll_directory(r"C:\Windows")  # for find jack.dll
+
+import pylase as ol
+
 
 class LaserThread(threading.Thread):
 	def __init__(self):

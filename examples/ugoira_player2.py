@@ -13,9 +13,12 @@ from contextlib import closing
 import functools
 
 from PIL import Image, ImageTk
+from pixiv_config import *
+
+if os.name == 'nt':
+    os.add_dll_directory(r"C:\Windows")  # for find jack.dll
 
 import pylase as ol
-from pixiv_config import *
 
 # for MinGW
 if True:

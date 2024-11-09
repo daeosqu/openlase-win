@@ -39,14 +39,13 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 
 #include "qplayvid_gui.h"
 
+#define QS(s) s.toStdString().c_str()
 #define Setting(name, ...) \
 	addSetting(new PlayerSetting(this, #name, settings.name, __VA_ARGS__))
 
 int opt_auto_play = 0;
 int opt_auto_quit = 0;
 int opt_debug = 0;
-
-#define QS(s) s.toStdString().c_str()
 
 PlayerUI::PlayerUI(QWidget *parent)
 	: QMainWindow(parent)
@@ -518,13 +517,18 @@ bool PlayerUI::event(QEvent *e)
 void PlayerUI::loadSettings(void)
 {
 	QFile file(filename + ".cfg");
-	QFile file2 = QString(QFileInfo(file).dir().filePath("default.cfg"));
+	QFile file2(QDir::homePath() + "/.config/openlase/default.cfg");
+
 	QFile *pfile = &file;
 	if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
 		//file = QFileInfo(file).absolutePath();
 		if (!file2.open(QIODevice::ReadOnly | QIODevice::Text)) {
-			ol_info("No default settings found %s\n", file2.fileName().toLocal8Bit().constData());
+			ol_warn("No default settings found %s\n",
+					file2.fileName().toLocal8Bit().constData());
 			return;
+		} else {
+			ol_warn("Using default settings from %s\n",
+					file2.fileName().toLocal8Bit().constData());
 		}
 		pfile = &file2;
 	}

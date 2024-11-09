@@ -1,121 +1,221 @@
 [cmdletbinding()]
 param()
 
-$OldVerbosePreference=$VerbosePreference
-$VerbosePreference="SilentlyContinue"
-Import-Module $PSScriptRoot\functions.psm1
-$VerbosePreference=$OldVerbosePreference
+# Import necessary modules
+Import-Module "$PSScriptRoot\functions.psm1"
 
-if (-Not $env:AHK_DIR) {
-    $env:AHK_DIR=Get-ChildItem "C:\Program Files\AutohotKey" -Directory | Where-Object -Property Name -like v1.* | Select-Object -First 1 | % { $_.FullName }
-}
-if (-Not $env:AHK_DIR) {
-    Write-Verbose -Message "AutoHotKey is not installed." -Verbose
+# Functions
+function Enable-VsDevEnv {
+    # Get the list of Visual Studio instances, sorted by version, and filtered for specific product types
+    $vsInstances = Get-CimInstance -ClassName MSFT_VSInstance -Namespace root/cimv2/vs |
+        Sort-Object -Property Version |
+        Where-Object -Property ProductId -match '^Microsoft\.VisualStudio\.Product\.(Community|Professional|Enterprise)$'
+    
+    # If no Visual Studio instances are found, display a warning and return
+    if (-not $vsInstances) {
+        Write-Warning -Message "Error: Visual Studio is not installed."
+        return
+    }
+    
+    # Get the latest version of Visual Studio installed
+    $vsLatestVersion = ($vsInstances | ForEach-Object { [System.Version]($_.Version) } | Sort-Object | Select-Object -Last 1).ToString()
+    $vs = $vsInstances | Where-Object -Property Version -eq $vsLatestVersion
+    
+    # Import the Visual Studio development shell module and set up the environment
+    Import-Module ($vs.InstallLocation + "\Common7\Tools\Microsoft.VisualStudio.DevShell.dll")
+    $env:VSINSTALLDIR = ""
+    Enter-VsDevShell -InstanceId $vs.IdentifyingNumber -SkipAutomaticLocation -DevCmdArguments "-arch=x64 -host_arch=x64"
 }
 
-if (-Not $env:WIX_DIR) {
-    $env:WIX_DIR=Get-ChildItem "C:\Program Files (x86)" -Directory | Where-Object -Property Name -like "WiX Toolset v3.*" | Select-Object -First 1 | % { $_.FullName }
+function Get-PythonDirectory {
+    # Check if pyenv command exists
+    $pyenvExec = Get-Command -Name pyenv -ErrorAction SilentlyContinue
+    if ($pyenvExec) {
+        # If pyenv exists, use pyenv which python to get the Python path
+        $pythonPath = pyenv which python
+        if ($pythonPath) {
+            return (Get-Item -Path $pythonPath).DirectoryName
+        }
+    }
+    
+    # If pyenv doesn't exist or fails, fallback to finding python normally
+    $pyexec = Get-Command -Name python.exe -ErrorAction SilentlyContinue | Where-Object { $_.Source -notlike "*WindowsApps*" }
+    if ($pyexec) {
+        return (Get-Item -Path $pyexec.Path).DirectoryName
+    }
+
+    return $null
 }
-if ($env:WIX_DIR) {
-    Write-Verbose -Message "Wix v3 found $env:WIX_DIR"
-    $env:PATH = "$env:PATH;$env:WIX_DIR\bin"
+
+# Set OL_DIR if not defined, resolving its path based on the presence of openlase.cmd
+if (-not $env:OL_DIR) {
+    if (Test-Path -Path "$PSScriptRoot\..\..\VERSION") {
+	$env:OL_DIR = (Resolve-Path -Path "$PSScriptRoot\..\..").Path
+    } elseif (Test-Path -Path "$PSScriptRoot\..\..\..\share\openlase\VERSION") {
+	$env:OL_DIR = (Resolve-Path -Path "$PSScriptRoot\..\..\..").Path
+    } else {
+        Write-Warning "Can not find VERSION file. OL_DIR environment variable could not be set."
+    }
+}
+
+if (-not $env:OL_DIR) {
+    $env:OL_DIR = "C:\Program Files\OpenLase"
+    Write-Verbose -Message "OL_DIR is not set, default is $env:OL_DIR" -Verbose
 } else {
-    Write-Verbose -Message "WIX_DIR is not set." -Verbose
+    Write-Verbose -Message "OL_DIR is $env:OL_DIR" -Verbose
 }
 
-if (-Not $env:OL_DIR) {
-    $env:OL_DIR = "$PSScriptRoot\..\.." | Resolve-Path
+if ($env:OL_DEVEL -eq $null) {
+    if (Test-Path -Path "$env:OL_DIR\.git") {
+	$env:OL_DEVEL = 1
+    } else {
+	$env:OL_DEVEL = ""
+    }
 }
-Write-Verbose -Message "OL_DIR is $env:OL_DIR"
 
+# Environment Variables Setup
+# Set default build type if not defined
+if (-not $env:OL_BUILD_TYPE) {
+    $env:OL_BUILD_TYPE = "Release"
+}
+
+# Load OpenLase initialization script based on whether in development mode or not
+$openlaserc = if (-not $env:OL_DEVEL) { "$HOME\.openlaserc.ps1" } else { "$env:OL_DIR\.openlaserc.ps1" }
+if (Test-Path -Path $openlaserc) {
+    Write-Verbose -Message "Loading $openlaserc" -Verbose
+    . $openlaserc
+} else {
+    Write-Verbose -Message "NOTE: You can create an initialization script at $openlaserc" -Verbose
+}
+
+# Find AutoHotkey executable directory
+# Set AHK_DIR if not defined, looking up in the registry and finding the appropriate version
+if (-not $env:AHK_DIR) {
+    $ahkDir = (Get-ItemProperty -Path "HKLM:\SOFTWARE\AutoHotkey").InstallDir
+    $env:AHK_DIR = Get-ChildItem -Path $ahkDir -Directory | Where-Object -Property Name -match '^v1\..*' | Select-Object -First 1 | ForEach-Object { $_.FullName }
+    if (-not $env:AHK_DIR) {
+        $env:AHK_DIR = $ahkDir
+    }
+}
+
+# Verify if AutoHotkey executable exists in AHK_DIR
+if ($env:AHK_DIR) {
+    if (-not (Test-Path -Path "$env:AHK_DIR\AutoHotkeyU64.exe")) {
+        Write-Verbose -Message "Cannot find AutoHotKey v1" -Verbose
+    }
+} else {
+    Write-Verbose -Message "Please set AHK_DIR" -Verbose
+}
+
+# Enable Visual Studio Development Environment if in development mode
 if ($env:OL_DEVEL) {
-    Write-Verbose -Message "Development mode (OL_DEVEL is true)"
-    cd $env:OL_DIR
+    Enable-VsDevEnv
 }
 
-if (-Not $env:OL_DEVEL) {
-    $openlaserc="$HOME\.openlaserc.ps1"
-} else {
-    $openlaserc="$env:OL_DIR\.openlaserc.ps1"
-}
-
-if (Test-Path "$openlaserc") {
-    Write-Verbose -Message "loading $openlaserc" -Verbose
-    . "$openlaserc"
-} else {
-    Write-Verbose -Message "NOTE: You can make a initialization script to $openlaserc" -Verbose
-}
-
-if ($env:OL_DATA_DIR) {
-    Write-Verbose -Message "OL_DATA_DIR is $env:OL_DATA_DIR"
-} else {
-    $env:OL_DATA_DIR="$HOME\.cache\openlase"
+# Set OL_DATA_DIR if not defined, and create the directory if it doesn't exist
+if (-not $env:OL_DATA_DIR) {
+    $env:OL_DATA_DIR = "$HOME\.cache\openlase"
     Write-Verbose -Message "OL_DATA_DIR is not set, default is $env:OL_DATA_DIR" -Verbose
 }
+New-Item -Path "$env:OL_DATA_DIR" -ItemType Directory -ErrorAction SilentlyContinue
 
-md "$env:OL_DATA_DIR" -ea 0
+# Update PATH to include necessary directories
+$env:PATH = "$env:AHK_DIR;$env:PATH"
+$env:PATH = "C:\Program Files\JACK2;$env:PATH"
+$env:PATH = "C:\Program Files\JACK2\qjackctl;$env:PATH"
+$env:PATH = "C:\Program Files\JACK2\tools;$env:PATH"
 
-$env:PATH="$env:AHK_DIR;$env:PATH"
-$env:PATH="C:\Program Files\JACK2;$env:PATH"
-$env:PATH="C:\Program Files\JACK2\qjackctl;$env:PATH"
-$env:PATH="C:\Program Files\JACK2\tools;$env:PATH"
 if ($env:OL_DEVEL) {
-    $env:OL_BUILD_DIR="$env:OL_DIR\build"
-    $env:PATH="$env:OL_DIR\build\libol;$env:PATH"
-    $env:PATH="$env:OL_DIR\build\tools;$env:PATH"
-    $env:PATH="$env:OL_DIR\build\tools\qplayvid;$env:PATH"
-    $env:PATH="$env:OL_DIR\build\output;$env:PATH"
-    $env:PATH="$env:OL_DIR\build\examples;$env:PATH"
-    $env:PATH="$env:OL_DIR\build\examples\lase_demo;$env:PATH"
-    $env:PATH="$env:OL_DIR\build\jopa_install\usr\local\bin;$env:PATH"
-    $env:PATH="$env:OL_DIR;$env:PATH"
-    $env:PATH="$env:OL_DIR\scripts\win;$env:PATH"
-    $env:PATH="$env:OL_DIR\tools;$env:PATH"
-
-    if (-Not $env:Qt5_DIR) {
-	If (Test-Path "C:/Qt/Qt5.14.2/5.14.2/msvc2017_64") {
-	    $env:Qt5_DIR = "C:/Qt/Qt5.14.2/5.14.2/msvc2017_64"
-	    Write-Warning -Message "Qt5_DIR is not set, default is $env:Qt5_DIR."
-	} else {
-	    Write-Warning -Message "Qt5_DIR is not set, please set Qt5_DIR."
-	}
+    # If in development mode, update PATH to include various build directories
+    if (-not $env:WIX) {
+        Write-Verbose -Message "WIX is not set." -Verbose
     }
-    $env:PYTHONPATH="$env:OL_DIR\build\python"
+    $env:OL_BUILD_DIR = "$env:OL_DIR\build-$env:OL_BUILD_TYPE.Windows"
+    $env:PATH = "$env:OL_BUILD_DIR\libol;$env:PATH"
+    $env:PATH = "$env:OL_BUILD_DIR\tools;$env:PATH"
+    $env:PATH = "$env:OL_BUILD_DIR\tools\qplayvid;$env:PATH"
+    $env:PATH = "$env:OL_BUILD_DIR\output;$env:PATH"
+    $env:PATH = "$env:OL_BUILD_DIR\examples;$env:PATH"
+    $env:PATH = "$env:OL_BUILD_DIR\examples\lase_demo;$env:PATH"
+    $env:PATH = "$env:OL_BUILD_DIR\jopa_install\usr\local\bin;$env:PATH"
+    $env:PATH = "$env:OL_DIR;$env:PATH"
+    $env:PATH = "$env:OL_DIR\scripts\win;$env:PATH"
+    $env:PATH = "$env:OL_DIR\tools;$env:PATH"
 
-    if ( ! $env:VCPKG_ROOT) {
-	if (Test-Path "$env:USERPROFILE\scoop\apps\vcpkg\current\scripts\buildsystems\vcpkg.cmake") {
-	    $env:VCPKG_ROOT = "$env:USERPROFILE\scoop\apps\vcpkg\current";
-	    Write-Verbose -Message "set VCPKG_ROOT=$env:VCPKG_ROOT" -Verbose
-	} else {
-	    Write-Warning -Message "Please set VCPKG_ROOT."
-	}
+    # Set Qt5_DIR if not already set, based on default Qt installation path
+    if (-not $env:Qt5_DIR) {
+        if (Test-Path -Path "C:/Qt/Qt5.14.2/5.14.2/msvc2017_64") {
+            $env:Qt5_DIR = "C:/Qt/Qt5.14.2/5.14.2/msvc2017_64"
+            Write-Warning -Message "Qt5_DIR is not set, default is $env:Qt5_DIR."
+        } else {
+            Write-Warning -Message "Qt5_DIR is not set, please set Qt5_DIR."
+        }
     }
+    $env:PYTHONPATH = "$env:OL_BUILD_DIR\python"
 
-    if ($env:VCPKG_ROOT -and ! (Test-Path "$env:VCPKG_ROOT\scripts\buildsystems\vcpkg.cmake")) {
-	Write-Warning -Message "Can not find vcpkg.cmake in $env:VCPKG_ROOT."
+    # Verify if vcpkg.cmake exists in VCPKG_ROOT
+    if ($env:VCPKG_ROOT -and -not (Test-Path -Path "$env:VCPKG_ROOT\scripts\buildsystems\vcpkg.cmake")) {
+        Write-Warning -Message "Cannot find vcpkg.cmake in $env:VCPKG_ROOT."
     } else {
-	Write-Verbose -Message "Found vcpkg: $env:VCPKG_ROOT\scripts\buildsystems\vcpkg.cmake"
+        Write-Verbose -Message "Found vcpkg: $env:VCPKG_ROOT\scripts\buildsystems\vcpkg.cmake"
     }
 } else {
-    $env:OL_BUILD_DIR=""
-    $env:PATH="$env:OL_DIR\bin;$env:PATH"
-    $env:PATH="$env:OL_DIR;$env:PATH"
-    $env:PATH="$env:OL_DIR\bin\scripts\win;$env:PATH"
-    $env:PATH="$env:OL_DIR\tools;$env:PATH"
-    $env:PYTHONPATH="$env:OL_DIR\bin"
+    # If not in development mode, set build directory and update PATH accordingly
+    $env:OL_BUILD_DIR = ""
+    $env:PATH = "$env:OL_DIR\bin;$env:PATH"
+    $env:PATH = "$env:OL_DIR;$env:PATH"
+    $env:PATH = "$env:OL_DIR\bin\scripts\win;$env:PATH"
+    $env:PATH = "$env:OL_DIR\tools;$env:PATH"
+    $env:PYTHONPATH = "$env:OL_DIR\bin"
 }
 
-if (-Not $env:OL_PYTHON_DIR) {
-    if (Test-Path "C:\opt\python311") {
-	$env:OL_PYTHON_DIR="C:\opt\python311"
-    } Else {
-	Write-Verbose -Message "OL_PYTHON_DIR is not set." -Verbose
+# Set OL_PYTHON_DIR if not defined, using Get-PythonDirectory function
+if (-not $env:OL_PYTHON_DIR) {
+    if ($env:OL_DEVEL) {
+        # In development mode, change directory to OL_DIR before getting Python directory
+        Push-Location -Path $env:OL_DIR
+        $env:OL_PYTHON_DIR = Get-PythonDirectory
+        Pop-Location
+    } else {
+        $env:OL_PYTHON_DIR = Get-PythonDirectory
+    }
+    
+    # Log the Python directory information
+    if ($env:OL_PYTHON_DIR) {
+        Write-Verbose -Message "OL_PYTHON_DIR is not set, default is $env:OL_PYTHON_DIR" -Verbose
+    } else {
+        Write-Verbose -Message "OL_PYTHON_DIR is not set. Please set OL_PYTHON_DIR." -Verbose
     }
 }
 
-if (Test-Path "$env:OL_PYTHON_DIR") {
-    $env:PATH="$env:OL_PYTHON_DIR\Scripts;$env:PATH"
-    $env:PATH="$env:OL_PYTHON_DIR;$env:PATH"
+# Update PATH to include Python directories if OL_PYTHON_DIR is set
+if ($env:OL_PYTHON_DIR -and (Test-Path -Path "$env:OL_PYTHON_DIR")) {
+    $env:PATH = "$env:OL_PYTHON_DIR\Scripts;$env:PATH"
+    $env:PATH = "$env:OL_PYTHON_DIR;$env:PATH"
 }
 
-$VerbosePreference=$OldVerbosePreference
+# Set title for Windows Terminal
+$title = "OpenLase"
+$version = ""
+
+$version_file = Join-Path -Path "$env:OL_DIR" -ChildPath 'VERSION'
+if (-not (Test-Path -Path $version_file)) {
+    $version_file = Join-Path -Path "$env:OL_DIR" -ChildPath 'share\openlase\VERSION'
+}
+
+if (Test-Path -Path $version_file) {
+    $version = Get-Content -Path $version_file -Raw | Select-Object -First 1
+}
+
+if ($version -ne "") {
+    $title = "$title $version"
+}
+
+# If in development mode, change directory to OL_DIR
+if ($env:OL_DEVEL) {
+    $Host.UI.RawUI.WindowTitle = "$title [DEV]"
+    Write-Verbose -Message "Development mode (OL_DEVEL is true)"
+    Set-Location -Path $env:OL_DIR
+} else {
+    $Host.UI.RawUI.WindowTitle = "$title"
+}

@@ -17,9 +17,13 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 
+import sys
+
+if os.name == 'nt':
+    os.add_dll_directory(r"C:\Windows")  # for find jack.dll
+
 import pylase as ol
 
-import sys
 
 if ol.init(10) < 0:
 	sys.exit(1)

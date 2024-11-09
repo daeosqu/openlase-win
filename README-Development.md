@@ -19,7 +19,6 @@
   - cmake 3.29.2 64bit
   - yasm 1.3.0
   - ffmpeg 7.0
-  - inno-setup 6.2.2
   - gsudo 2.4.4
 - Libraries (vcpkg)
   - ffmpeg4.4.3 (< 5.x)
@@ -80,7 +79,7 @@ git config --global core.autocrlf false
 scoop で必要なツール類をインストールします。
 
 ```powershell
-scoop install cmake yasm ffmpeg inno-setup gsudo vcpkg 
+scoop install cmake yasm ffmpeg gsudo vcpkg 
 ```
 
 # Install python3

@@ -6,6 +6,8 @@ import re
 import subprocess
 import unicodedata
 from pathlib import Path
+import tempfile
+import shutil
 import shlex
 
 import click
@@ -22,7 +24,10 @@ class MediaManager:
     Row = Query()
 
     ydl_opts = {
+        # oldownload https://www.nicovideo.jp/watch/sm35241141 でエラーになる
+        # yt_dlp.utils.DownloadError: ERROR: [niconico] sm35241141: Requested format is not available. Use --list-formats for a list of available formats
         'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
+        #'format': 'best',
     }
 
     def __init__(self):
@@ -43,6 +48,8 @@ class MediaManager:
             **self.ydl_opts,
             'quiet': True,
             'simulate': True,
+            #'cookiesfrombrowser': ('chrome', ),
+            #'cookiesfrombrowser': ('firefox', 'default', None, 'Meta'),
         }
 
     def get_download_opts(self, filepath):
@@ -79,6 +86,7 @@ class MediaManager:
                     self.add_row(row)
             else:
                 self.add_row(row)
+        
         if row is not None:
             return MediaFile(self, row)
         else:
@@ -120,27 +128,22 @@ class MediaManager:
         return filename
 
     def normalize_row(self, row):
+
+        def update_filename(key, filename):
+            oldname = row.get(key)
+            if oldname is not None and oldname != filename:
+                p = getattr(self, key + '_dir') / oldname
+                if p.exists():
+                    p.rename(getattr(self, key + '_dir') / filename)
+            row[key] = filename
+
         idstr = '{:03d}'.format(row['id'])
         mediakey = row['hash']
         filename = idstr + '.' + mediakey + '.' + self.normalize_filename(row['title']) + '.' + row['ext']
 
-        old = {
-            'cache': row.get('cache'),
-            'media': row.get('media'),
-        }
-
         row['idstr'] = idstr
-        row['cache'] = filename
-        row['media'] = filename
-
-        def rename_file(key):
-            if old[key] is not None and old[key] != row[key]:
-                p = getattr(self, key + '_dir') / old[key]
-                if p.exists():
-                    p.rename(getattr(self, key + '_dir') / row[key])
-
-        rename_file('cache')
-        rename_file('media')
+        update_filename('cache', filename)
+        update_filename('media', filename)
 
     def normalize_database(self):
         self.db.update(self.normalize_row)
@@ -149,6 +152,7 @@ class MediaManager:
 class MediaFile:
 
     MAX_WIDTH = 1280
+    MAX_HEIGHT = 720
     MIN_VIDEO_BIT_RATE = 786432
     MAX_VIDEO_BIT_RATE = 2097152
     MAX_AUDIO_BIT_RATE = 256000
@@ -163,7 +167,12 @@ class MediaFile:
 
     @property
     def media_path(self):
+        
         return Path(self.mm.media_dir / self.row['media'])
+
+    @property
+    def title(self):
+        return self.row['title']
 
     @property
     def idstr(self):
@@ -195,7 +204,10 @@ class MediaFile:
                 ydl.download([self.url])
 
     def get_gpu(self):
-        output = subprocess.run(['nvidia-smi', '-L'], stdout=subprocess.PIPE).stdout.decode('utf-8')
+        try:
+            output = subprocess.run(['nvidia-smi', '-L'], stdout=subprocess.PIPE).stdout.decode('utf-8')
+        except FileNotFoundError:
+            return None
         lines = output.split('\n')
         if len(lines) > 0:
             first = lines[0]
@@ -205,17 +217,12 @@ class MediaFile:
         return None
 
     def ensure_video(self):
-        ifilepath = self.cache_path
-        ofilepath = self.media_path
 
-        gpu = self.get_gpu()
-        if gpu:
-            vcodec = 'h264_nvenc'
-        else:
-            vcodec = 'libx264'
+        ofilepath = self.media_path
 
         if not ofilepath.exists():
             self.ensure_cache()
+            ifilepath = self.cache_path
 
             print(f'{self.idstr}: convert: path={str(ifilepath)}', file=sys.stderr)
             self.prepare()
@@ -231,8 +238,17 @@ class MediaFile:
 
                 fps1, fps2 = video_info['r_frame_rate'].split('/')
                 fps = float(fps1) / float(fps2)
-                audio_bit_rate = round(float(audio_info['bit_rate']))
-                video_bit_rate = round(float(video_info['bit_rate']))
+                width = round(float(video_info['width']))
+                height = round(float(video_info['height']))
+
+                try:
+                    audio_bit_rate = round(float(audio_info['bit_rate']))
+                except KeyError:
+                    audio_bit_rate = self.MAX_AUDIO_BIT_RATE
+                try:
+                    video_bit_rate = round(float(video_info['bit_rate']))
+                except KeyError:
+                    video_bit_rate = self.MAX_VIDEO_BIT_RATE
                 print(f'input video fps is {fps}', file=sys.stderr)
                 print(f'video bit rate is {video_bit_rate}', file=sys.stderr)
                 print(f'audio bit rate is {audio_bit_rate}', file=sys.stderr)
@@ -246,7 +262,15 @@ class MediaFile:
                                          fps=min(fps, 30),
                                          round='down')
 
-                video = video.filter('scale', 720, -1,
+                wr = self.MAX_WIDTH / width
+                hr = self.MAX_HEIGHT / height
+                r = min(wr, hr, 1)
+                w = int(width * r)
+                h = int(height * r)
+                w = max(16, w & 0xFFF0)
+                h = max(16, h & 0xFFFE)
+
+                video = video.filter('scale', w, h,
                                      force_original_aspect_ratio='decrease')
 
 #-threads 1 -hwaccel nvdec -hwaccel_device 0 -hwaccel_output_format cuda 
@@ -267,6 +291,12 @@ class MediaFile:
 
                 media = ffmpeg.concat(video, audio, v=1, a=1)
 
+                gpu = self.get_gpu()
+                if gpu:
+                    vcodec = 'h264_nvenc'
+                else:
+                    vcodec = 'libx264'
+
                 output_options = {
                     'vcodec': vcodec,
                     'acodec': 'aac',
@@ -285,18 +315,30 @@ class MediaFile:
                 if audio_bit_rate > self.MAX_AUDIO_BIT_RATE:
                     output_options['b:a'] = str(self.MAX_AUDIO_BIT_RATE)
 
-                cmd = (
-                    media
-                    .output(str(ofilepath), **output_options)
-                    .global_args('-hide_banner')
-                    .global_args('-hwaccel_device', 'auto')
-                    .global_args('-hwaccel', 'auto')
-                )
+                try:
+                    with tempfile.NamedTemporaryFile(suffix=ofilepath.suffix, delete=False) as tmp:
+                        tmpname = tmp.name
+                    cmd = (
+                        media
+                        .output(tmpname, **output_options)
+                        .global_args('-hide_banner')
+                        .global_args('-hwaccel_device', 'auto')
+                        .global_args('-hwaccel', 'auto')
+                    )
 
-                args = ' '.join(map(shlex.quote, cmd.get_args()))
-                print(f"FFmpeg Arguments: {args}", file=sys.stderr)
+                    args = ' '.join(map(shlex.quote, cmd.get_args()))
+                    print(f"FFmpeg Arguments: {args}", file=sys.stderr)
 
-                cmd.run()
+                    try:
+                        cmd.run(overwrite_output=True)
+                    except Exception:
+                        raise
+                    else:
+                        Path(tmpname).rename(ofilepath)
+                        tmpname = None
+                finally:
+                    if tmpname is not None:
+                        Path(tmpname).unlink()
 
 
 @click.command(
@@ -311,6 +353,13 @@ class MediaFile:
     'list_files',
     is_flag=True,
     help="List media files",
+)
+@click.option(
+    "-t",
+    "--title",
+    'list_titles',
+    is_flag=True,
+    help="List media titles",
 )
 @click.option(
     "-p",
@@ -362,19 +411,25 @@ class MediaFile:
     help="Print filenames with id",
 )
 @click.argument("args", nargs=-1)
-def main(list_files, migrate, playvid, playvid2, qplayvid, command, force_convert, force_convert_all, by_id, args):
+def main(list_files, list_titles, migrate, playvid, playvid2, qplayvid, command, force_convert, force_convert_all, by_id, args):
     mm = MediaManager()
 
     if migrate:
         mm.normalize_database()
 
-    if list_files:
+    if list_files or list_titles:
         if len(args) == 0:
             arr = mm.all()
         else:
+            # TODO
             arr = []
+        if list_titles and list_files:
+            title_prefix = '# '
         for mf in arr:
-            print(str(mf.media_path), file=original_stdout)
+            if list_titles:
+                print(title_prefix + str(mf.title), file=original_stdout)
+            if list_files:
+                print(str(mf.media_path), file=original_stdout)
     elif force_convert_all:
         for mf in mm.all():
             mf.delete()

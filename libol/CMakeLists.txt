@@ -57,7 +57,6 @@ option(LIBOL_INCLUDE_PACKAGING "Include packaging rules for libol" YES)
 ################
 
 find_package(JACK REQUIRED)
-find_package(Python3 REQUIRED COMPONENTS Interpreter)
 
 ###############
 ##  Library  ##
@@ -80,7 +79,7 @@ endif()
 
 if(NOT DEFINED BUILD_TRACER)
   # Should be "Y" or not
-  set(BUILD_TRACER "Y" CACHE BOOL "Build the image tracer (x86 only)" FORCE)
+  set(BUILD_TRACER "Y" CACHE BOOL "Build the image tracer" FORCE)
 endif()
 
 set(TRACER_SOURCES "")
@@ -155,7 +154,7 @@ else()
 endif()
 
 # Compiler options
-target_compile_features(${LIBRARY_TARGET_NAME} PUBLIC cxx_std_11)
+target_compile_features(${LIBRARY_TARGET_NAME} PRIVATE cxx_std_11)
 target_compile_definitions(${LIBRARY_TARGET_NAME} PUBLIC "$<$<NOT:$<BOOL:${BUILD_SHARED_LIBS}>>:${export_h_prefix}_STATIC_DEFINE>")
 
 target_include_directories(${LIBRARY_TARGET_NAME}
@@ -168,7 +167,7 @@ target_include_directories(${LIBRARY_TARGET_NAME}
   "$<INSTALL_INTERFACE:include>"
 )
 
-target_link_libraries(${LIBRARY_TARGET_NAME} PUBLIC Jack::Jack ${MATH_LIBRARY} PRIVATE ${CMAKE_THREAD_LIBS_INIT} ${COMPILED_YASM_OBJS})
+target_link_libraries(${LIBRARY_TARGET_NAME} PUBLIC Jack::Jack ${MATH_LIBRARY} PRIVATE ${CMAKE_THREAD_LIBS_INIT})
 
 set_target_properties(${LIBRARY_TARGET_NAME} PROPERTIES
   OUTPUT_NAME "${LIBRARY_OUTPUT_NAME}")

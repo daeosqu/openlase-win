@@ -28,7 +28,9 @@ function olstart
     run_qjackctl
     jack_wait -w
     run_simulator
-    run_output
+    if (-Not $env:OL_NO_RUN_OUTPUT) {
+	run_output
+    }
 }
 
 function olstart_slave
@@ -48,10 +50,26 @@ function olstop
 
 function olbuild
 {
+    param($generator = "vs",
+	  $generator_opts = "")
+
+    switch -RegEx ($generator.ToLower()) {
+	'ninja' {
+	    $generator = "Ninja"
+	}
+	'^vs$|^visualstudio$' {
+            $generator = "Visual Studio 17 2022"
+	    if ($generator_opts -eq "") {
+		$generator_opts = "-A x64"
+	    }
+	}
+    }
+
     if ($env:OL_BUILD_DIR -And $env:OL_DIR) {
 	cd "$env:OL_DIR" -ea 0 | Out-Null
-	cmake -S . -B "$env:OL_BUILD_DIR" -G "Ninja" -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=On -DPython3_ROOT_DIR="$env:OL_PYTHON_DIR" -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT\scripts\buildsystems\vcpkg.cmake"
-	ninja -C "$env:OL_BUILD_DIR"
+	cmake -S . -B "$env:OL_BUILD_DIR" -G $generator $generator_opts -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=On -DPython3_ROOT_DIR="$env:OL_PYTHON_DIR" -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT\scripts\buildsystems\vcpkg.cmake"
+	#ninja -C "$env:OL_BUILD_DIR"
+	cmake --build "$env:OL_BUILD_DIR" --config "$env:OL_BUILD_TYPE"
     } else {
 	Write-Host "OL_DIR or OL_BUILD_DIR is not defined. Please run openlace.cmd in OpenLase source directory."
     }
@@ -79,3 +97,5 @@ function olinstall
 }
 
 Export-ModuleMember -Function ahk, run_jackd_dummy, run_qjackctl, run_simulator, run_output, olstart, olstart_slave, olstop, olbuild, olclean, olinstall
+
+

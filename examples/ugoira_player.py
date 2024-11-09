@@ -18,8 +18,13 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 
 import sys, os, json, http.cookiejar, urllib.request, urllib.parse, urllib.error, urllib.request, urllib.error, urllib.parse, zipfile, io
-import pylase as ol
 from PIL import Image
+
+if os.name == 'nt':
+    os.add_dll_directory(r"C:\Windows")  # for find jack.dll
+
+import pylase as ol
+
 
 def fetch_ugo(illust_id):
     cj = http.cookiejar.CookieJar()

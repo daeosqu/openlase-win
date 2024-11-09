@@ -57,13 +57,18 @@ function olstop
 
 function olbuild_unix
 {
-    cd "$OL_BUILD_DIR"
-    cmake .. -G 'Ninja' -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr/local/openlase
-    ninja clean && ninja
+    cmake -S "${OL_SOURCE_DIR}" -B "${OL_BUILD_DIR}" -G 'Ninja' -DCMAKE_BUILD_TYPE=${OL_BUILD_TYPE} -DCMAKE_INSTALL_PREFIX=/usr/local/openlase
+    ninja -C "${OL_BUILD_DIR}"
+}
+
+function olclean
+{
+    ninja -C "${OL_BUILD_DIR}" clean
 }
 
 function olbuild_debian
 {
+    echo "Install OpenLase build dependencies..."
     sudo apt-get install -y python3 python3-dev cython3 libjack-jackd2-dev libavcodec-dev libavutil-dev libswresample-dev libavformat-dev libswscale-dev libavdevice-dev freeglut3-dev libopenmpt-modplug-dev qtbase5-dev
     olbuild_unix
 }
@@ -95,9 +100,9 @@ function olbuild_mingw
 
     pip install --no-input jaconv yt-dlp tinydb
 
-    cd "$OL_BUILD_DIR"
-    PKG_CONFIG_PATH=/ucrt64/lib/ffmpeg4.4/pkgconfig:$PKG_CONFIG_PATH cmake .. -G 'Ninja' -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=${MINGW_PREFIX}/local/openlase
-    ninja clean && ninja
+    PKG_CONFIG_PATH=/ucrt64/lib/ffmpeg4.4/pkgconfig:$PKG_CONFIG_PATH cmake -S "${OL_SOURCE_DIR}" -B "${OL_BUILD_DIR}" -G 'Ninja' -DCMAKE_BUILD_TYPE=${OL_BUILD_TYPE} -DCMAKE_INSTALL_PREFIX=${MINGW_PREFIX}/local/openlase -DPython3_EXECUTABLE="$(asdf which python3 2>/dev/null)"
+
+    ninja -C "${OL_BUILD_DIR}"
 }
 
 function olbuild

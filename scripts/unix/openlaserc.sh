@@ -1,13 +1,23 @@
 #!/usr/bin/bash
 
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
-export OL_DIR=$(readlink -f "$SCRIPT_DIR/../..")
 
-if [ -z "${OL_DEVEL+1}" ]; then
-    if [ -d "${OL_DIR}/.git" ]; then
+OL_DIR=${SCRIPT_DIR}/../..
+if [ -d "${OL_DIR}/.git" ]; then
+    if [ -z "${OL_DEVEL+1}" ]; then
 	OL_DEVEL=1
     fi
+    OL_SOURCE_DIR=${OL_DIR}
+else
+    OL_DIR=${SCRIPT_DIR}/..
 fi
+export OL_DIR=$(readlink -f "$OL_DIR")
+export OL_BUILD_TYPE=${OL_BUILD_TYPE:-Release}
+
+if [ -z "${OL_PYTHON_DIR}" ] && which asdf 2>/dev/null 2>&1; then
+    export OL_PYTHON_DIR=$(asdf where python 2>/dev/null | sed 's/.*System version.*//')
+fi
+export OL_PYTHON=$(asdf which python3 2>/dev/null || which python3 2>/dev/null)
 
 if [ -n "$OL_DEVEL" ]; then
 
@@ -21,12 +31,12 @@ if [ -n "$OL_DEVEL" ]; then
     uname=$(uname)
     case "$uname" in
 	MINGW64*)
-	    name=mingw64;;
+	    name=MINGW;;
 	*)
 	    name=$uname;;
     esac
 
-    export OL_BUILD_DIR=$OL_DIR/build-$name
+    export OL_BUILD_DIR=$OL_DIR/build-$OL_BUILD_TYPE.$name
     PATH=$OL_BUILD_DIR/libol:$PATH
     PATH=$OL_BUILD_DIR/tools:$PATH
     PATH=$OL_BUILD_DIR/tools/qplayvid:$PATH
@@ -37,6 +47,9 @@ if [ -n "$OL_DEVEL" ]; then
     PATH=$OL_DIR/examples:$PATH
     PATH=$OL_DIR/tools:$PATH
     PATH=$OL_DIR/scripts/unix:$PATH
+    if [ -n "$OL_PYTHON_DIR" ]; then
+	PATH=$OL_PYTHON_DIR/bin:$PATH
+    fi
     export LD_LIBRARY_PATH=$OL_DIR/build/libol:$LD_LIBRARY_PATH
     export PYTHONPATH=$OL_BUILD_DIR/python:$PYTHONPATH
 else

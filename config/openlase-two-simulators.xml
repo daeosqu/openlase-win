@@ -1,5 +1,5 @@
 <!DOCTYPE patchbay>
-<patchbay name="openlase-laserdock" version="0.9.9">
+<patchbay name="openlase-two-simulators" version="0.9.9">
  <output-sockets>
   <socket name="olnet-audio" client="olnet" type="jack-audio" exclusive="on">
    <plug>from_slave_6</plug>
@@ -32,6 +32,13 @@
    <plug>out_b</plug>
   </socket>
   <socket name="libol-laser" client="libol" type="jack-audio" exclusive="off">
+   <plug>out_x</plug>
+   <plug>out_y</plug>
+   <plug>out_r</plug>
+   <plug>out_g</plug>
+   <plug>out_b</plug>
+  </socket>
+  <socket name="libol-laser-01" client="libol-01" type="jack-audio" exclusive="off">
    <plug>out_x</plug>
    <plug>out_y</plug>
    <plug>out_r</plug>
@@ -128,26 +135,23 @@
  </input-sockets>
  <slots/>
  <cables>
-  <cable input="system" output="olnet-audio" type="jack-audio"/>
-  <cable input="system" output="libol-audio" type="jack-audio"/>
-  <cable input="JACK over PulseAudio" output="olnet-audio" type="jack-audio"/>
   <cable input="JACK over PulseAudio" output="libol-audio" type="jack-audio"/>
+  <cable input="JACK over PulseAudio" output="olnet-audio" type="jack-audio"/>
+  <cable input="circlescope" output="system" type="jack-audio"/>
+  <cable input="lasershark" output="output" type="jack-audio"/>
   <cable input="netjack-audio-out" output="libol-audio" type="jack-audio"/>
   <cable input="scope" output="system" type="jack-audio"/>
-  <cable input="circlescope" output="system" type="jack-audio"/>
+  <cable input="simulator" output="libol-laser" type="jack-audio"/>
   <cable input="simulator" output="cal" type="jack-audio"/>
   <cable input="simulator" output="circlescope" type="jack-audio"/>
-  <cable input="simulator" output="libol-laser" type="jack-audio"/>
   <cable input="simulator" output="olnet-laser" type="jack-audio"/>
   <cable input="simulator" output="playilda" type="jack-audio"/>
   <cable input="simulator" output="scope" type="jack-audio"/>
-  <cable input="output" output="libol-laser" type="jack-audio"/>
-  <cable input="output" output="olnet-laser" type="jack-audio"/>
   <cable input="output" output="circlescope" type="jack-audio"/>
+  <cable input="output" output="olnet-laser" type="jack-audio"/>
   <cable input="output" output="playilda" type="jack-audio"/>
   <cable input="output" output="scope" type="jack-audio"/>
-  <cable input="lasershark" output="output" type="jack-audio"/>
+  <cable input="output" output="libol-laser-01" type="jack-audio"/>
   <cable input="simulator-01" output="output" type="jack-audio"/>
  </cables>
 </patchbay>
-

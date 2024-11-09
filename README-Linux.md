@@ -12,10 +12,8 @@ git clone https://github.com/daeosqu/openlase-win.git
 # Build
 
 ```
-echo 'OL_DEVEL=1' > .env
-
 cd $HOME/openlase-win
-. openlase-dev.sh
+. openlase.sh
 python -m pip install -r requirements.txt
 olbuild
 olinstall

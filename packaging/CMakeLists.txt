@@ -90,12 +90,6 @@ if (NOT CPACK_GENERATOR)
       list(APPEND CPACK_GENERATOR "INNOSETUP")
     else()
       message("Skip INNOSETUP package (iscc.exe is not installed)")
-      # find_program(CPACK_NSIS_EXECUTABLE makensis)
-      # if (CPACK_NSIS_EXECUTABLE)
-      # 	list(APPEND CPACK_GENERATOR "NSIS")
-      # else()
-      # 	message("Skip INNOSETUP and NSIS package (iscc.exe or makensis.exe is not installed)")
-      # endif()
     endif()
 
   else()
@@ -119,7 +113,6 @@ endif()
 set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/../LICENSE.txt")
 set(CPACK_PACKAGE_DESCRIPTION_FILE "${CMAKE_CURRENT_SOURCE_DIR}/../README.md")
 set(CPACK_SOURCE_IGNORE_FILES "${PROJECT_BINARY_DIR};/.git/;.gitignore")
-#set(CPACK_PACKAGE_ICON "${CMAKE_CURRENT_SOURCE_DIR}/../res/laser.ico")
 
 set(CPACK_WIX_LIGHT_EXTENSIONS WixUtilExtension)
 set(CPACK_WIX_PRODUCT_ICON "${CMAKE_CURRENT_SOURCE_DIR}/../res/laser.ico")
@@ -128,9 +121,6 @@ set(CPACK_WIX_UI_DIALOG "${CMAKE_CURRENT_SOURCE_DIR}/../res/wix-ui-dialog.bmp")
 set(CPACK_WIX_PATCH_FILE "${CMAKE_CURRENT_SOURCE_DIR}/cpack-wix-patch.xml")
 
 set(CPACK_INNOSETUP_ICON_FILE "${CMAKE_CURRENT_SOURCE_DIR}/../res/laser.ico")
-
-# TODO https://stackoverflow.com/questions/28768417/how-to-set-an-icon-in-nsis-install-cmake
-#set(CPACK_NSIS_MUI_ICON "")
 
 set(__cpack_system_name ${CMAKE_SYSTEM_NAME})
 if(__cpack_system_name MATCHES "Windows")

@@ -1,10 +1,5 @@
 #!/usr/bin/bash
 
-if [ ! -x yt-dlp ]; then
-   if ! pip install yt-dlp; then
-      echo 'Can not install yt-dlp!' >&2
-      exit 1
-   fi
-fi
+SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 
-yt-dlp "$@"
+${OL_PYTHON} ${SCRIPT_DIR}/oldownload.py "$@"

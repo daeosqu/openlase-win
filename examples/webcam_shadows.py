@@ -3,7 +3,11 @@ import sys
 import cv2
 from PIL import Image
 
+if os.name == 'nt':
+    os.add_dll_directory(r"C:\Windows")  # for find jack.dll
+
 import pylase as ol
+
 
 cv2.namedWindow("preview")
 if len(sys.argv) < 1:

@@ -40,4 +40,3 @@ QJackCtl を起動して Patchbay で config/openlase-netjack.xml をロード�
 playvid /mnt/c/opt/el/data/bad_apple.mp4
 ```
 
-"$OL_DIR/config/openlase-netjack.xml"

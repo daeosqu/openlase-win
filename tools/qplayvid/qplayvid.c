@@ -1349,15 +1349,14 @@ void *display_thread(void *arg)
 
 						rgb2hsv(r, g, b, &h, &s, &v);
 
-						if (s < 0.01) {
-							h = 0;
-							s = 0;
-							v = 0.8;
-						} else {
-							s = s * 0.9 + 0.1;  // high saturation
-							s = MIN(s, 0.99);
-						}
-						v = MAX(0.8, v);  // high luminance
+						float gamma = 0.2;
+						float s1 = 0;
+						float v1 = 0.8 + 0.2 * abs(v * 2 - 1.0);
+						float s2 = 1;
+						float v2 = 0.8 + 0.2 * v;
+						float f = pow(s, gamma);
+						s = (1 - f) * s1 + f * s2;
+						v = (1 - f) * v1 + f * v2;
 
 						hsv2rgb(h, s, v, &r, &g, &b);
 
