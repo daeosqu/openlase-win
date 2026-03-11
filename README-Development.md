@@ -13,7 +13,7 @@
 - [Git for Windows 2.44.0.1](https://gitforwindows.org/)
 - [Qt5 x86-5.14.2 (qt-opensource-windows-x86-5.14.2.exe)](https://download.qt.io/archive/qt/5.14/5.14.2/qt-opensource-windows-x86-5.14.2.exe)
 - python 3.11.9 (64bit) (3.11 or older)
-  - cython 0.29.x
+  - cython 3.2.x
 - [wix3](https://github.com/wixtoolset/wix3/releases/)
 - [Scoop](https://scoop.sh/)
   - cmake 3.29.2 64bit
@@ -21,16 +21,16 @@
   - ffmpeg 7.0
   - gsudo 2.4.4
 - Libraries (vcpkg)
-  - ffmpeg4.4.3 (< 5.x)
+  - ffmpeg 7.1.1
   - freeglut3.4.0
   - getopt
   - libmodplug0.8.9.0
   - pdcurses3.9
   - pthreads3.0.0
 
-# Install PowerShell 7.x
+# Install PowerShell 7.x (OPTIONAL)
 
-PowerShell 7 以降インストールをします。以後 PowerShell 7 を利用します。
+PowerShell 7 を推薦。
 
 ```powershell
 PS> winget install --id Microsoft.Powershell --source winget
@@ -63,95 +63,111 @@ PS> winget install --id Microsoft.Powershell --source winget
 }
 ```
 
-# Install applications
-
-以下のアプリケーションをインストールしておきます。
-
-
-git は自動改行変換をオフにしておきます。
-
-```
-git config --global core.autocrlf false
-```
-
-# Install with scoop
+# Install with scoop (OPTIONAL)
 
 scoop で必要なツール類をインストールします。
 
 ```powershell
-scoop install cmake yasm ffmpeg gsudo vcpkg 
+scoop install cmake yasm ffmpeg gsudo vcpkg
+scoop update cmake yasm ffmpeg gsudo vcpkg
 ```
 
-# Install python3
+# Install python3 (OPTIONAL)
 
-Python3 (>= 3.11) をインストールします。
+Python3 をインストールします。
 
-```powershell
-if (!$env:OL_PYTHON_DIR) { $env:OL_PYTHON_DIR="C:\opt\python311" }
-
-$TargetVer="3.11.9"
-$Arch="-amd64"
-$py_url="https://www.python.org/ftp/python/${TargetVer}/python-${TargetVer}${Arch}.exe"
-
-Invoke-WebRequest "$py_url" -OutFile "$env:USERPROFILE\Downloads\python-${TargetVer}${Arch}.exe"
-
-. $env:USERPROFILE\Downloads\python-${TargetVer}${Arch}.exe InstallAllUsers=0 TargetDir=$env:OL_PYTHON_DIR AssociateFiles=0 CompileAll=0 PrependPath=0 Shortcuts=0 Include_doc=0 Include_debug=1 Include_dev=1 Include_exe=1 Include_launcher=0 InstallLauncherAllUsers=0 Include_lib=1 Include_pip=1 Include_symbols=1 Include_tcltk=1 Include_test=0 Include_tools=1 LauncherOnly=0 SimpleInstall=1
 ```
-
-Python パッケージをインストールします。ビルドには cython 以外は不要です。ただし cython のバージョンは 0.29.x 以下にしてください。
-
-```powershell
-$env:OL_PYTHON_DIR\python -m ensurepip
-$env:OL_PYTHON_DIR\python -m pip install -r requirements.txt
+pyenv install 3.11.9
+pyenv local 3.11.9
 ```
 
 # ソースコードの準備
 
 作業ディレクトリを作成してクローンします。
 
-# Clone
-
 ```powershell
 mkdir C:/opt/el
 cd C:/opt/el
 cd C:/opt/el
-git clone --config core.autocrlf=false https://github.com/daeosqu/openlase-win.git
-```
-
-# Install
-
-```
+git -c core.autocrlf=false clone https://github.com/daeosqu/openlase-win.git 
 cd C:/opt/el/openlase-win
 . openlase.cmd
 ```
 
-OpenLase ターミナルが起動したら以下のコマンドを実行します。
+# Cleanup
+
+念のためビルドディレクトリ等をクリアしておきます。
 
 ```
-olbuild
-olinstall
+rm -r venv
+rm -r build
+rm -r python\build
 ```
+
+# 仮想環境
+
+仮想環境を準備します。
+
+```powershell
+pyenv exec python -m venv venv
+.\venv\Scripts\Activate.ps1
+python -m pip install -r requirements.txt
+```
+
+# Build (GNU Make)
+
+msys, make が必要です。
+
+```
+scoop install msys2 make
+make shell
+make build
+make dist
+```
+
+# Build (windows)
 
 または以下の様にコマンドを実行します。
 
+Ninja の場合:
+
 ```powershell
-cd C:/opt/el/openlase-win
-
-$env:OL_PYTHON_DIR="c:/opt/python311"
-$env:Qt5_DIR="C:/Qt/Qt5.14.2/5.14.2/msvc2017_64"
-
-$env:PATH="$env:OL_PYTHON_DIR;$env:OL_PYTHON_DIR\Scripts;$env:PATH"
-
-cmake -S . -B "build" -G "Ninja" -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=On -DPython3_ROOT_DIR="$env:OL_PYTHON_DIR" -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT\scripts\buildsystems\vcpkg.cmake"
-
+$env:DISTUTILS_USE_SDK = "1"
+Import-Module .\scripts\win\ol_utils.psm1
+Enable-VsDevEnv
+.\venv\Scripts\Activate.ps1
+$env:DISTUTILS_USE_SDK = "1"
+cmake -S . -B "build" -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=On -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT\scripts\buildsystems\vcpkg.cmake" -DPython3_EXECUTABLE="venv\Scripts\python.exe" -DQt5_DIR="C:/Qt/Qt5.14.2/5.14.2/msvc2017_64/lib/cmake/Qt5"
 ninja -C build
+```
 
-gsudo cmake --install build
-# or
+Visual Studio の場合:
+
+```
+$env:DISTUTILS_USE_SDK = "1"
+Import-Module .\scripts\win\ol_utils.psm1
+Enable-VsDevEnv
+.\venv\Scripts\Activate.ps1
+cmake -S . -B "build" -G "Visual Studio 17 2022" -A x64 -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=On -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT\scripts\buildsystems\vcpkg.cmake" -DPython3_EXECUTABLE="venv\Scripts\python.exe" -DQt5_DIR="C:/Qt/Qt5.14.2/5.14.2/msvc2017_64/lib/cmake/Qt5"
+cmake --build "build" --config Release --verbose
+```
+
+NOTE: インストール先を変更する場合は `-DCMAKE_INSTALL_PREFIX="./install"` のように指定します。
+
+# Install (windows)
+
+```
+cmake --install build
+```
+
+# Build Package (windows)
+
+```
 cd build
 cpack
-.\Openlase-*.msi
 ```
+
+生成された `build/openlase-0.0.5-win64.msi` をインストールします。
 
 # Install PixivUtil2 (OPTIONAL)
 
@@ -162,3 +178,15 @@ Invoke-WebRequest -Uri "https://github.com/Nandaka/PixivUtil2/releases/download/
 Expand-Archive pixivutil202305.zip -DestinationPath "$HOME/.local/pixivutil" -Force
 del pixivutil202305.zip
 ```
+
+# Yamaha AG06mk2 について
+
+公式の Jack Audio バイナリーパッケージ (Windows) が AG06mk2 で動作しませんでした。その場合は [mingw-w64-ucrt-x86_64-jack2-1.9.22.zip](https://github.com/daeosqu/jack2-build-win/releases/download/v0.2/mingw-w64-ucrt-x86_64-jack2-1.9.22.zip) を使ってください。
+
+QjackCtl の Server Prefix を `<PATH-TO-JACK2>\jackd.exe -S -X winmme` のように変更します。
+
+# 2ch 以上として認識されるオーディオデバイスの場合
+
+2ch 以上のオーディオデバイスが接続されている場合、Jack のパッチベイが混乱して接続が切れたり繋がったりを繰り返してしまいます。この場合は QjackCtl の Settings -> Advanced タブで Channels I/O を 2ch に設定してください。
+
+

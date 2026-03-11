@@ -33,7 +33,13 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include <QString>
 #include "output_settings.h"
 
+#ifdef _MSC_VER
+#include <getopt.h>
+#endif
+
 #undef max
+
+int opt_quiet = 0;
 
 typedef jack_default_audio_sample_t sample_t;
 typedef jack_nframes_t nframes_t;
@@ -285,13 +291,16 @@ static int bufsize (nframes_t nframes, void *arg)
 static int srate (nframes_t nframes, void *arg)
 {
 	rate = nframes;
-	if(rate % 1000) {
-		printf("error: the sample rate should be a multiple of 1000\n");
-		exit(1);
+
+	if (rate % 1000) {
+		fprintf(stderr, "warning: sample rate %d not multiple of 1000; enable frequency will be approximate\n", rate);
 	}
+
 	enable_period = nframes / 1000;
+	if (enable_period < 1) enable_period = 1;
 	enable_ctr = 0;
-	printf ("Sample rate: %u/sec\n", nframes);
+	printf("Enable period: %u frames\n", enable_period);
+	printf("Sample rate: %u/sec\n", nframes);
 	return 0;
 }
 
@@ -306,6 +315,25 @@ int main (int argc, char *argv[])
 	jack_client_t *client;
 	static const char jack_client_name[] = "output";
 	jack_status_t jack_status;	
+
+	int optchar;
+
+	while ((optchar = getopt(argc, argv, "q")) != -1) {
+		switch (optchar) {
+		case 'q':
+			opt_quiet = 1;
+			break;
+		default:
+			break;
+		}
+	}
+
+#ifdef _WIN32
+	if (opt_quiet) {
+		// Free the existing console to hide it
+		FreeConsole();
+	}
+#endif
 
 	QApplication app(argc, argv);
 	OutputSettings settings;

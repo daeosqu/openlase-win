@@ -4,7 +4,7 @@
 
 #NoEnv
 #Warn
-#SingleInstance ignore
+#SingleInstance force
 SetBatchLines, -1
 
 #Include %A_ScriptDir%\common.ahk

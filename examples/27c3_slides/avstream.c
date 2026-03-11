@@ -41,38 +41,44 @@ static void dolog(void *foo, int level, const char *fmt, va_list ap)
 static void avstream_init(void)
 {
 	av_log_set_callback(dolog);
-	av_register_all();
 	inited = 1;
 }
 
 int video_readframe(VContext *ctx, AVFrame **oFrame)
 {
-	static AVPacket packet;
-	int bytesDecoded;
-	int frameFinished = 0;
+	AVPacket packet;
+	int ret;
 
-	while (!frameFinished) {
-		do {
-			if(av_read_frame(ctx->av.formatctx, &packet)<0) {
-				*oFrame = ctx->frame;
-				return 0;
-			}
-		} while(packet.stream_index!=ctx->av.stream);
+	while (1) {
+		if (av_read_frame(ctx->av.formatctx, &packet) < 0) {
+			*oFrame = ctx->frame;
+			return 0;
+		}
+		if (packet.stream_index != ctx->av.stream) {
+			av_packet_unref(&packet);
+			continue;
+		}
 
-		bytesDecoded=avcodec_decode_video2(ctx->av.codecctx, ctx->frame, &frameFinished, &packet);
-		if (bytesDecoded < 0)
-		{
+		ret = avcodec_send_packet(ctx->av.codecctx, &packet);
+		av_packet_unref(&packet);
+		if (ret < 0) {
+			olLog("Error while sending video packet\n");
+			*oFrame = ctx->frame;
+			return 0;
+		}
+
+		ret = avcodec_receive_frame(ctx->av.codecctx, ctx->frame);
+		if (ret == AVERROR(EAGAIN))
+			continue;
+		if (ret < 0) {
 			olLog("Error while decoding video frame\n");
 			*oFrame = ctx->frame;
 			return 0;
 		}
-		if (bytesDecoded != packet.size) {
-			olLog("Multiframe packets not supported (%d != %d)\n", bytesDecoded, packet.size);
-			exit(1);
-		}
+
+		*oFrame = ctx->frame;
+		return 1;
 	}
-	*oFrame = ctx->frame;
-	return 1;
 }
 
 int audio_readsamples(AContext *ctx, float *lb, float *rb, int samples)
@@ -80,6 +86,7 @@ int audio_readsamples(AContext *ctx, float *lb, float *rb, int samples)
 	AVPacket packet;
 	int got_frame;
 	int input_samples;
+	int ret;
 	int total = 0;
 	AVFrame *a_frame;
 	while (samples)
@@ -94,11 +101,19 @@ int audio_readsamples(AContext *ctx, float *lb, float *rb, int samples)
 			} while(packet.stream_index!=ctx->av.stream);
 
 			a_frame = av_frame_alloc();
-			a_frame->nb_samples = AVCODEC_MAX_AUDIO_FRAME_SIZE;
-			ctx->av.codecctx->get_buffer2(ctx->av.codecctx, a_frame, 0);
-
-			avcodec_decode_audio4(ctx->av.codecctx, a_frame, &got_frame, &packet);
+			ret = avcodec_send_packet(ctx->av.codecctx, &packet);
+			if (ret < 0) {
+				av_packet_unref(&packet);
+				av_frame_free(&a_frame);
+				memset(lb, 0, samples*sizeof(float));
+				memset(rb, 0, samples*sizeof(float));
+				return -1;
+			}
+			ret = avcodec_receive_frame(ctx->av.codecctx, a_frame);
+			got_frame = (ret == 0);
+			av_packet_unref(&packet);
 			if (!got_frame) {
+				av_frame_free(&a_frame);
 				olLog("Error while decoding audio frame\n");
 				memset(lb, 0, samples*sizeof(float));
 				memset(rb, 0, samples*sizeof(float));
@@ -118,6 +133,7 @@ int audio_readsamples(AContext *ctx, float *lb, float *rb, int samples)
 #endif
 
 			ctx->poabuf = ctx->oabuf;
+			av_frame_free(&a_frame);
 		}
 
 		*lb++ = *ctx->poabuf++;
@@ -148,7 +164,7 @@ int video_open(VContext **octx, char *file, float start_pos)
 
 	int stream=-1;
 	for (i=0; i<ctx->av.formatctx->nb_streams; i++) {
-		if (ctx->av.formatctx->streams[i]->codec->codec_type==AVMEDIA_TYPE_VIDEO) {
+		if (ctx->av.formatctx->streams[i]->codecpar->codec_type==AVMEDIA_TYPE_VIDEO) {
 			stream=i;
 			break;
 		}
@@ -157,10 +173,14 @@ int video_open(VContext **octx, char *file, float start_pos)
 		goto error;
 
 	ctx->av.stream = stream;
-	ctx->av.codecctx = ctx->av.formatctx->streams[stream]->codec;
-	ctx->av.codec = avcodec_find_decoder(ctx->av.codecctx->codec_id);
+	ctx->av.codec = avcodec_find_decoder(ctx->av.formatctx->streams[stream]->codecpar->codec_id);
 
 	if (ctx->av.codec == NULL)
+		goto error;
+	ctx->av.codecctx = avcodec_alloc_context3(ctx->av.codec);
+	if (!ctx->av.codecctx)
+		goto error;
+	if (avcodec_parameters_to_context(ctx->av.codecctx, ctx->av.formatctx->streams[stream]->codecpar) < 0)
 		goto error;
 
 	if (avcodec_open2(ctx->av.codecctx, ctx->av.codec, NULL) < 0)
@@ -185,8 +205,8 @@ error:
 
 int video_close(VContext *ctx)
 {
-	av_free(ctx->frame);
-	avcodec_close(ctx->av.codecctx);
+	av_frame_free(&ctx->frame);
+	avcodec_free_context(&ctx->av.codecctx);
 //	av_close_input_file(ctx->av.formatctx);
 	free(ctx);
 
@@ -213,7 +233,7 @@ int audio_open(AContext **octx, char *file, float start_pos)
 
 	int stream=-1;
 	for (i=0; i<ctx->av.formatctx->nb_streams; i++) {
-		if (ctx->av.formatctx->streams[i]->codec->codec_type==AVMEDIA_TYPE_AUDIO) {
+		if (ctx->av.formatctx->streams[i]->codecpar->codec_type==AVMEDIA_TYPE_AUDIO) {
 			stream=i;
 			break;
 		}
@@ -222,10 +242,14 @@ int audio_open(AContext **octx, char *file, float start_pos)
 		goto error;
 
 	ctx->av.stream = stream;
-	ctx->av.codecctx = ctx->av.formatctx->streams[stream]->codec;
-	ctx->av.codec = avcodec_find_decoder(ctx->av.codecctx->codec_id);
+	ctx->av.codec = avcodec_find_decoder(ctx->av.formatctx->streams[stream]->codecpar->codec_id);
 
 	if (ctx->av.codec == NULL)
+		goto error;
+	ctx->av.codecctx = avcodec_alloc_context3(ctx->av.codec);
+	if (!ctx->av.codecctx)
+		goto error;
+	if (avcodec_parameters_to_context(ctx->av.codecctx, ctx->av.formatctx->streams[stream]->codecpar) < 0)
 		goto error;
 
 	if (avcodec_open2(ctx->av.codecctx, ctx->av.codec, NULL) < 0)
@@ -234,10 +258,28 @@ int audio_open(AContext **octx, char *file, float start_pos)
 #if USE_AVRESAMPLE
 	ctx->resampler = avresample_alloc_context();
 #else
-	ctx->resampler = swr_alloc();
+	ctx->resampler = NULL;
 #endif
-	av_opt_set_int(ctx->resampler, "in_channel_layout", ctx->av.codecctx->channel_layout, 0);
+	AVChannelLayout out_ch_layout;
+	av_channel_layout_default(&out_ch_layout, 2);
+#if USE_AVRESAMPLE
+	int64_t in_ch_layout = av_get_default_channel_layout(ctx->av.codecctx->ch_layout.nb_channels);
+	av_opt_set_int(ctx->resampler, "in_channel_layout", in_ch_layout, 0);
 	av_opt_set_int(ctx->resampler, "out_channel_layout", AV_CH_LAYOUT_STEREO, 0);
+#else
+	if (swr_alloc_set_opts2(&ctx->resampler,
+					&out_ch_layout,
+					AV_SAMPLE_FMT_FLT,
+					48000,
+					&ctx->av.codecctx->ch_layout,
+					ctx->av.codecctx->sample_fmt,
+					ctx->av.codecctx->sample_rate,
+					0,
+					NULL) < 0) {
+		av_channel_layout_uninit(&out_ch_layout);
+		goto error;
+	}
+#endif
 	av_opt_set_int(ctx->resampler, "in_sample_rate", ctx->av.codecctx->sample_rate, 0);
 	av_opt_set_int(ctx->resampler, "out_sample_rate", 48000, 0);
 	av_opt_set_int(ctx->resampler, "in_sample_fmt", ctx->av.codecctx->sample_fmt, 0);
@@ -247,7 +289,11 @@ int audio_open(AContext **octx, char *file, float start_pos)
 #else
 	if (swr_init(ctx->resampler))
 #endif
+	{
+		av_channel_layout_uninit(&out_ch_layout);
 		return -1;
+	}
+	av_channel_layout_uninit(&out_ch_layout);
 
 	if (!ctx->resampler)
 		goto error;
@@ -272,7 +318,7 @@ error:
 
 int audio_close(AContext *ctx)
 {
-	avcodec_close(ctx->av.codecctx);
+	avcodec_free_context(&ctx->av.codecctx);
 #if USE_AVRESAMPLE
 	avresample_close(ctx->resampler);
 #else

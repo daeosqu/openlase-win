@@ -59,7 +59,6 @@ endif()
 
 if(OPENGL_FOUND AND GLUT_FOUND)
   add_executable(simulator simulator.c)
-  #include_directories(${OPENGL_INCLUDE_DIRS} ${GLUT_INCLUDE_DIR})
   target_include_directories(simulator PRIVATE ${CMAKE_SOURCE_DIR}/common ${OPENGL_INCLUDE_DIRS} ${GLUT_INCLUDE_DIR})
   target_link_libraries(simulator ${MATH_LIBRARY} ${OPENGL_LIBRARIES} GLUT::GLUT ${JACK_LIBRARIES} ${GETOPT_LIBRARY} ${COMMON_LIBRARY})
   install(TARGETS simulator RUNTIME DESTINATION bin COMPONENT Applications)
@@ -73,8 +72,3 @@ add_subdirectory(qplayvid)
 
 file(GLOB PYTHON_SCRIPTS "*.py")
 install(FILES ${PYTHON_SCRIPTS} DESTINATION bin COMPONENT Applications)
-
-if (MSVC)
-  install(FILES oldownload.cmd DESTINATION bin COMPONENT Applications)
-endif()
-install(FILES oldownload DESTINATION bin COMPONENT Applications)

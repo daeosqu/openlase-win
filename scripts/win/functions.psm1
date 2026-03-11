@@ -27,9 +27,11 @@ function olstart
 {
     run_qjackctl
     jack_wait -w
-    run_simulator
+    $arguments = "-q $env:OL_SIMULATOR_ARGS"
+    Start-Process "simulator.exe" -ArgumentList $arguments
     if (-Not $env:OL_NO_RUN_OUTPUT) {
-	run_output
+	$arguments = "-q $env:OL_OUTPUT_ARGS"
+	Start-Process "output.exe" -ArgumentList $arguments
     }
 }
 
@@ -37,7 +39,7 @@ function olstart_slave
 {
     run_jackd_dummy
     jack_wait -w
-    run_qjackctl --active-patchbay "$env:OL_DIR\config\openlase-netjack.xml"
+    run_qjackctl --active-patchbay "$env:OL_DIR/config/openlase-netjack.xml"
     run_simulator
 }
 
@@ -48,54 +50,4 @@ function olstop
     taskkill /im simulator.exe /f
 }
 
-function olbuild
-{
-    param($generator = "vs",
-	  $generator_opts = "")
-
-    switch -RegEx ($generator.ToLower()) {
-	'ninja' {
-	    $generator = "Ninja"
-	}
-	'^vs$|^visualstudio$' {
-            $generator = "Visual Studio 17 2022"
-	    if ($generator_opts -eq "") {
-		$generator_opts = "-A x64"
-	    }
-	}
-    }
-
-    if ($env:OL_BUILD_DIR -And $env:OL_DIR) {
-	cd "$env:OL_DIR" -ea 0 | Out-Null
-	cmake -S . -B "$env:OL_BUILD_DIR" -G $generator $generator_opts -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=On -DPython3_ROOT_DIR="$env:OL_PYTHON_DIR" -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT\scripts\buildsystems\vcpkg.cmake"
-	#ninja -C "$env:OL_BUILD_DIR"
-	cmake --build "$env:OL_BUILD_DIR" --config "$env:OL_BUILD_TYPE"
-    } else {
-	Write-Host "OL_DIR or OL_BUILD_DIR is not defined. Please run openlace.cmd in OpenLase source directory."
-    }
-}
-
-function olclean
-{
-    if ($env:OL_BUILD_DIR) {
-	md "$env:OL_BUILD_DIR" -ea 0 | Out-Null
-	cd "$env:OL_BUILD_DIR"
-	cmake --build . --target clean
-    } else {
-	Write-Host "Please run openlace-dev.cmd in OpenLase source directory."
-    }
-}
-
-function olinstall
-{
-    if (Test-Path "$env:OL_BUILD_DIR") {
-	olstop 2>&1 | Out-Null
-	gsudo cmake --install "$env:OL_BUILD_DIR"
-    } else {
-	Write-Host "OL_BUILD_DIR is not set. Please run openlace-dev.cmd in OpenLase source directory."
-    }
-}
-
-Export-ModuleMember -Function ahk, run_jackd_dummy, run_qjackctl, run_simulator, run_output, olstart, olstart_slave, olstop, olbuild, olclean, olinstall
-
-
+Export-ModuleMember -Function ahk, run_jackd_dummy, run_qjackctl, run_simulator, run_output, olstart, olstart2, olstart_slave, olstop

@@ -167,6 +167,8 @@ typedef void (*LogCallbackFunc)(const char *msg);
 
 LIBOL_EXPORT void olSetLogCallback(LogCallbackFunc f);
 
+LIBOL_EXPORT int olGetJackRate(void);
+
 #ifdef __cplusplus
 }  // extern "C"
 #endif

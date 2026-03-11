@@ -29,15 +29,14 @@ git config --global core.autocrlf false
 
 ```
 cd
-git clone https://github.com/daeosqu/openlase-win.git
+git clone https://github.com/daeosqu/openlase-win-dev.git
 ```
 
 ## Build and Install
 
 ```
-echo 'OL_DEVEL=1' > .env
-cd $HOME/openlase-win
-. openlase-dev.sh
+cd $HOME/openlase-win-dev
+source openlase.sh
 olbuild
 olinstall
 ```

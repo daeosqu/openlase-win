@@ -1,0 +1,45 @@
+[build-system]
+requires = [
+    "setuptools>=82",
+    "setuptools_scm[toml]>=8",
+    "Cython>=3.2,<4",
+]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pylase"
+dynamic = ["version"]
+requires-python = ">=3.10"  # yt-dlp requires python >= 3.10
+
+dependencies = [
+    "click>=8.1.8,<9",
+    "jaconv>=0.5,<1",
+    "tinydb>=4.8.2,<5",
+    "ffmpeg-python>=0.2.0,<1",
+    "jack-client>=0.5.5,<1",
+    "yt-dlp",
+]
+
+[project.optional-dependencies]
+dev = [
+    "build",
+]
+extra = [
+    "pillow>=11.0.0",
+    "av>=15.1.0",
+    "numpy>=2.2.6,<3",
+    "opencv-contrib-python>=4.10.0.84,<5",
+    "cv2-enumerate-cameras>=1.3.0,<2",
+    "QtPy>=2.4.1,<3",
+    "PyQt5>=5.15.11,<6",
+]
+
+[project.scripts]
+oldownload = "pylase.oldownload:main"
+
+[tool.setuptools.packages.find]
+include = ["pylase*"]
+
+[tool.setuptools_scm]
+version_file = "pylase/_version.py"
+fallback_version = "0.0.0.dev0"

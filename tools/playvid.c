@@ -61,6 +61,7 @@ is a hack.
 #endif
 #include <libavutil/frame.h>
 #include <libavutil/opt.h>
+#include <libavutil/channel_layout.h>
 
 #ifdef _MSC_VER
 #include <getopt.h>
@@ -79,8 +80,8 @@ AVFormatContext        *pFormatCtx = NULL;
 AVFormatContext        *pAFormatCtx = NULL;
 AVCodecContext         *pCodecCtx;
 AVCodecContext         *pACodecCtx;
-AVCodec                *pCodec;
-AVCodec                *pACodec;
+const AVCodec          *pCodec;
+const AVCodec          *pACodec;
 AVFrame         	   *pFrame;
 AVFrame 			   *pAudioFrame;
 #if USE_AVRESAMPLE
@@ -101,31 +102,37 @@ int videoStream, audioStream;
 int GetNextFrame(AVFormatContext *pFormatCtx, AVCodecContext *pCodecCtx,
     int videoStream, AVFrame **oFrame)
 {
-	static AVPacket packet;
-	int             bytesDecoded;
-	int             frameFinished = 0;
+	AVPacket packet;
+	int ret;
 
-	while (!frameFinished) {
-		do {
-			if(av_read_frame(pFormatCtx, &packet)<0) {
-				fprintf(stderr, "EOF!\n");
-				return 0;
-			}
-		} while(packet.stream_index!=videoStream);
+	while (1) {
+		if (av_read_frame(pFormatCtx, &packet) < 0) {
+			fprintf(stderr, "EOF!\n");
+			return 0;
+		}
+		if (packet.stream_index != videoStream) {
+			av_packet_unref(&packet);
+			continue;
+		}
 
-		bytesDecoded=avcodec_decode_video2(pCodecCtx, pFrame, &frameFinished, &packet);
-		if (bytesDecoded < 0)
-		{
+		ret = avcodec_send_packet(pCodecCtx, &packet);
+		av_packet_unref(&packet);
+		if (ret < 0) {
+			fprintf(stderr, "Error while sending video packet\n");
+			return 0;
+		}
+
+		ret = avcodec_receive_frame(pCodecCtx, pFrame);
+		if (ret == AVERROR(EAGAIN))
+			continue;
+		if (ret < 0) {
 			fprintf(stderr, "Error while decoding frame\n");
 			return 0;
 		}
-		if (bytesDecoded != packet.size) {
-			printf("Multiframe packets not supported (%d != %d)\n", bytesDecoded, packet.size);
-			exit(1);
-		}
+
+		*oFrame = pFrame;
+		return 1;
 	}
-	*oFrame = pFrame;
-	return 1;
 }
 
 void moreaudio(float *lb, float *rb, int samples)
@@ -145,9 +152,13 @@ void moreaudio(float *lb, float *rb, int samples)
 				}
 			} while(packet.stream_index!=audioStream);
 
-			pAudioFrame->nb_samples = AUDIO_BUF;
-			pACodecCtx->get_buffer2(pACodecCtx, pAudioFrame, 0);
-			avcodec_decode_audio4(pACodecCtx, pAudioFrame, &decoded_frame, &packet);
+			if (avcodec_send_packet(pACodecCtx, &packet) < 0) {
+				av_packet_unref(&packet);
+				fprintf(stderr, "Error while sending audio packet\n");
+				return;
+			}
+			decoded_frame = avcodec_receive_frame(pACodecCtx, pAudioFrame) == 0;
+			av_packet_unref(&packet);
 			if(!decoded_frame)
 			{
 				fprintf(stderr, "Error while decoding audio frame\n");
@@ -188,7 +199,7 @@ int	 av_vid_init(char *file)
 
 	videoStream=-1;
 	for (i=0; i<pFormatCtx->nb_streams; i++) {
-		if (pFormatCtx->streams[i]->codec->codec_type==AVMEDIA_TYPE_VIDEO) {
+		if (pFormatCtx->streams[i]->codecpar->codec_type==AVMEDIA_TYPE_VIDEO) {
 			videoStream=i;
 			break;
 		}
@@ -196,10 +207,13 @@ int	 av_vid_init(char *file)
 	if (videoStream==-1)
 		return -1;
 
-	pCodecCtx=pFormatCtx->streams[videoStream]->codec;
-
-	pCodec=avcodec_find_decoder(pCodecCtx->codec_id);
+	pCodec=avcodec_find_decoder(pFormatCtx->streams[videoStream]->codecpar->codec_id);
 	if (pCodec==NULL)
+		return -1;
+	pCodecCtx = avcodec_alloc_context3(pCodec);
+	if (pCodecCtx == NULL)
+		return -1;
+	if (avcodec_parameters_to_context(pCodecCtx, pFormatCtx->streams[videoStream]->codecpar) < 0)
 		return -1;
 
 	if (avcodec_open2(pCodecCtx, pCodec, NULL)<0)
@@ -214,8 +228,6 @@ int av_aud_init(char *file)
 {
 	int i;
 
-	av_register_all();
-
 	if (avformat_open_input(&pAFormatCtx, file, NULL, NULL)!=0)
 		return -1;
 
@@ -224,7 +236,7 @@ int av_aud_init(char *file)
 
 	audioStream=-1;
 	for (i=0; i<pAFormatCtx->nb_streams; i++)
-		if (pAFormatCtx->streams[i]->codec->codec_type==AVMEDIA_TYPE_AUDIO)
+		if (pAFormatCtx->streams[i]->codecpar->codec_type==AVMEDIA_TYPE_AUDIO)
 		{
 			audioStream=i;
 			break;
@@ -232,12 +244,16 @@ int av_aud_init(char *file)
 	if (audioStream==-1)
 		return -1;
 
-	pACodecCtx=pAFormatCtx->streams[audioStream]->codec;
+	pACodecCtx = NULL;
 	pAudioFrame = av_frame_alloc();
 
-
-	pACodec=avcodec_find_decoder(pACodecCtx->codec_id);
+	pACodec=avcodec_find_decoder(pAFormatCtx->streams[audioStream]->codecpar->codec_id);
 	if (pACodec==NULL)
+		return -1;
+	pACodecCtx = avcodec_alloc_context3(pACodec);
+	if (pACodecCtx == NULL)
+		return -1;
+	if (avcodec_parameters_to_context(pACodecCtx, pAFormatCtx->streams[audioStream]->codecpar) < 0)
 		return -1;
 
 	if (avcodec_open2(pACodecCtx, pACodec, NULL)<0)
@@ -245,15 +261,31 @@ int av_aud_init(char *file)
 
 #if USE_AVRESAMPLE
 	resampler = avresample_alloc_context();
-#else
-	resampler = swr_alloc();
-#endif
-	av_opt_set_int(resampler, "in_channel_layout", pACodecCtx->channel_layout, 0);
+	int64_t in_ch_layout = av_get_default_channel_layout(pACodecCtx->ch_layout.nb_channels);
+	av_opt_set_int(resampler, "in_channel_layout", in_ch_layout, 0);
 	av_opt_set_int(resampler, "out_channel_layout", AV_CH_LAYOUT_STEREO, 0);
 	av_opt_set_int(resampler, "in_sample_rate", pACodecCtx->sample_rate, 0);
 	av_opt_set_int(resampler, "out_sample_rate", 48000, 0);
 	av_opt_set_int(resampler, "in_sample_fmt", pACodecCtx->sample_fmt, 0);
 	av_opt_set_int(resampler, "out_sample_fmt", AV_SAMPLE_FMT_FLT, 0);
+#else
+	resampler = NULL;
+	AVChannelLayout out_ch_layout;
+	av_channel_layout_default(&out_ch_layout, 2);
+	if (swr_alloc_set_opts2(&resampler,
+					&out_ch_layout,
+					AV_SAMPLE_FMT_FLT,
+					48000,
+					&pACodecCtx->ch_layout,
+					pACodecCtx->sample_fmt,
+					pACodecCtx->sample_rate,
+					0,
+					NULL) < 0) {
+		av_channel_layout_uninit(&out_ch_layout);
+		return -1;
+	}
+	av_channel_layout_uninit(&out_ch_layout);
+#endif
 
 #if USE_AVRESAMPLE
 	if (avresample_open(resampler))
@@ -270,11 +302,12 @@ int av_aud_init(char *file)
 
 int av_deinit(void)
 {
-	av_free(pFrame);
+	av_frame_free(&pFrame);
+	av_frame_free(&pAudioFrame);
 
 	// Close the codec
-	avcodec_close(pCodecCtx);
-	avcodec_close(pACodecCtx);
+	avcodec_free_context(&pCodecCtx);
+	avcodec_free_context(&pACodecCtx);
 
 	// Close the resamplers
 #if USE_AVRESAMPLE
@@ -322,9 +355,6 @@ int main (int argc, char *argv[])
 	OLRenderParams params;
 	AVFrame *frame;
 	int i;
-
-	// Register all formats and codecs
-	av_register_all();
 
 	memset(&params, 0, sizeof params);
 	params.rate = 48000;

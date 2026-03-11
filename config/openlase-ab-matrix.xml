@@ -38,6 +38,14 @@
    <plug>out_g</plug>
    <plug>out_b</plug>
   </socket>
+  <socket name="ab-matrix" client="ab-matrix" type="jack-audio" exclusive="off">
+   <plug>out_x</plug>
+   <plug>out_y</plug>
+   <plug>out_r</plug>
+   <plug>out_g</plug>
+   <plug>out_b</plug>
+   <plug>out_e</plug>
+  </socket>
   <socket name="cal" client="cal" type="jack-audio" exclusive="off">
    <plug>out_x</plug>
    <plug>out_y</plug>
@@ -68,6 +76,17 @@
    <plug>out_y</plug>
    <plug>out_w</plug>
   </socket>
+  <socket name="burn-mouse" client="burn-mouse" type="jack-audio" exclusive="on">
+   <plug>out_x</plug>
+   <plug>out_y</plug>
+   <plug>out_r</plug>
+   <plug>out_g</plug>
+   <plug>out_b</plug>
+   <plug>out_e</plug>
+  </socket>
+  <socket name="burn-mouse-ctrl" client="burn-mouse" type="jack-audio" exclusive="on">
+   <plug>out_switch</plug>
+  </socket>
  </output-sockets>
  <input-sockets>
   <socket name="JACK over PulseAudio" client="JACK\ over\ PulseAudio" type="jack-audio" exclusive="on">
@@ -95,6 +114,25 @@
    <plug>in_r</plug>
    <plug>in_g</plug>
    <plug>in_b</plug>
+  </socket>
+  <socket name="ab-matrix" client="ab-matrix" type="jack-audio" exclusive="off">
+   <plug>in_x</plug>
+   <plug>in_y</plug>
+   <plug>in_r</plug>
+   <plug>in_g</plug>
+   <plug>in_b</plug>
+   <plug>in_e</plug>
+  </socket>
+  <socket name="ab-matrix-alt" client="ab-matrix" type="jack-audio" exclusive="off">
+   <plug>alt_in_x</plug>
+   <plug>alt_in_y</plug>
+   <plug>alt_in_r</plug>
+   <plug>alt_in_g</plug>
+   <plug>alt_in_b</plug>
+   <plug>alt_in_e</plug>
+  </socket>
+  <socket name="ab-matrix-ctrl" client="ab-matrix" type="jack-audio" exclusive="on">
+   <plug>in_switch</plug>
   </socket>
   <socket name="simulator-01" client="simulator-01" type="jack-audio" exclusive="on">
    <plug>in_x</plug>
@@ -125,6 +163,17 @@
    <plug>in_l</plug>
    <plug>in_r</plug>
   </socket>
+  <socket name="ab_matrix" client="ab_matrix" type="jack-audio" exclusive="on">
+   <plug>alt_x</plug>
+   <plug>alt_y</plug>
+   <plug>alt_r</plug>
+   <plug>alt_g</plug>
+   <plug>alt_b</plug>
+   <plug>alt_i</plug>
+  </socket>
+  <socket name="burn-mouse-ctrl" client="burn-mouse" type="jack-audio" exclusive="on">
+   <plug>out_switch</plug>
+  </socket>
  </input-sockets>
  <slots/>
  <cables>
@@ -135,19 +184,17 @@
   <cable input="netjack-audio-out" output="libol-audio" type="jack-audio"/>
   <cable input="scope" output="system" type="jack-audio"/>
   <cable input="circlescope" output="system" type="jack-audio"/>
-  <cable input="simulator" output="cal" type="jack-audio"/>
-  <cable input="simulator" output="circlescope" type="jack-audio"/>
-  <cable input="simulator" output="libol-laser" type="jack-audio"/>
-  <cable input="simulator" output="olnet-laser" type="jack-audio"/>
-  <cable input="simulator" output="playilda" type="jack-audio"/>
-  <cable input="simulator" output="scope" type="jack-audio"/>
-  <cable input="output" output="libol-laser" type="jack-audio"/>
-  <cable input="output" output="olnet-laser" type="jack-audio"/>
-  <cable input="output" output="circlescope" type="jack-audio"/>
-  <cable input="output" output="playilda" type="jack-audio"/>
-  <cable input="output" output="scope" type="jack-audio"/>
+  <cable input="ab-matrix" output="cal" type="jack-audio"/>
+  <cable input="ab-matrix" output="circlescope" type="jack-audio"/>
+  <cable input="ab-matrix" output="libol-laser" type="jack-audio"/>
+  <cable input="ab-matrix" output="olnet-laser" type="jack-audio"/>
+  <cable input="ab-matrix" output="playilda" type="jack-audio"/>
+  <cable input="ab-matrix" output="scope" type="jack-audio"/>
+  <cable input="ab-matrix-alt" output="burn-mouse" type="jack-audio"/>
+  <cable input="ab-matrix-ctrl" output="burn-mouse-ctrl" type="jack-audio"/>
+  <cable input="output" output="ab-matrix" type="jack-audio"/>
+  <cable input="simulator-01" output="ab-matrix" type="jack-audio"/>
+  <cable input="simulator" output="output" type="jack-audio"/>
   <cable input="lasershark" output="output" type="jack-audio"/>
-  <cable input="simulator-01" output="output" type="jack-audio"/>
  </cables>
 </patchbay>
-

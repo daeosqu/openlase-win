@@ -18,8 +18,8 @@
 
 from math import pi
 
-if os.name == 'nt':
-    os.add_dll_directory(r"C:\Windows")  # for find jack.dll
+# if os.name == 'nt':
+#     os.add_dll_directory(r"C:\Windows")  # for find jack.dll
 
 import pylase as ol
 

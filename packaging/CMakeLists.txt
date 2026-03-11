@@ -16,6 +16,8 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #
 
+set(CPACK_WIX_UPGRADE_GUID "CBCE336B-50B3-42BB-BB0D-873EF41D886C")
+
 # Install
 
 install(FILES ../openlase.sh DESTINATION bin COMPONENT Applications)
@@ -25,7 +27,8 @@ install(FILES
   ../VERSION
   ../res/laser.ico
   ../test_patterns/ILDA12K.ild
-  ../config/openlase-laserdock.xml
+  ../config/openlase-ab-matrix.xml
+  ../config/openlase-no-ab-matrix.xml
   ../config/openlase-netjack.xml
   DESTINATION share/openlase COMPONENT Applications)
 
@@ -41,7 +44,13 @@ if (MSVC)
     )"
     CODE "list(FILTER ALL_RUNTIME_DLL EXCLUDE REGEX \"/(_CPack_Packages|vcpkg_installed|imageformats|platforms|styles|qtDeploy)/.*\")"
     CODE "message(\"Copying DLLs into \${CMAKE_INSTALL_PREFIX}/bin...\")"
-    CODE "file(INSTALL \${ALL_RUNTIME_DLL} DESTINATION \"\${CMAKE_INSTALL_PREFIX}/bin\")" COMPONENT Applications)
+    CODE "file(INSTALL
+      DESTINATION \"\${CMAKE_INSTALL_PREFIX}/bin\"
+      TYPE FILE
+      FILES \${ALL_RUNTIME_DLL}
+    )"
+    COMPONENT Applications
+  )
 endif()
 
 # Export
@@ -55,15 +64,40 @@ configure_package_config_file(${PROJECT_NAME}Config.cmake.in
   INSTALL_DESTINATION "${INSTALL_CMAKEDIR}"
 )
 
+# Install cmake config files
 install(FILES
   ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}Config.cmake
   ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}ConfigVersion.cmake
   DESTINATION ${INSTALL_CMAKEDIR}
   COMPONENT ${LIBOL_COMPONENT_NAME})
 
-# set(CPACK_INSTALL_PREFIX "${CPACK_PACKAGING_INSTALL_PREFIX}")
+# Install python wheel
+
+if (MSVC)
+  # Windows: installer decides actual install root.
+else()
+  if (NOT CPACK_PACKAGING_INSTALL_PREFIX)
+    set(CPACK_PACKAGING_INSTALL_PREFIX "/usr/local/openlase")
+  endif()
+endif()
+
 set(CPACK_PACKAGE_CONTACT "daisuke.qu@gmail.com")
 set(CPACK_PACKAGE_VENDOR "OpenLase-win")
+set(PY_WHEEL_DIR "${CMAKE_BINARY_DIR}/dist")
+
+install(CODE "
+  file(GLOB WHEEL_FILES \"${PY_WHEEL_DIR}/*.whl\")
+  if(NOT WHEEL_FILES)
+    message(FATAL_ERROR \"No Python wheel found in ${PY_WHEEL_DIR}. Build target 'pylase_wheel' before packaging.\")
+  endif()
+  file(INSTALL
+    DESTINATION \"\${CMAKE_INSTALL_PREFIX}/share/openlase/wheel\"
+    TYPE FILE
+    FILES \${WHEEL_FILES}
+  )
+" COMPONENT PythonWheel)
+
+# CPack configuration
 
 if (NOT CPACK_GENERATOR)
   if (MSVC)
@@ -91,19 +125,16 @@ if (NOT CPACK_GENERATOR)
     else()
       message("Skip INNOSETUP package (iscc.exe is not installed)")
     endif()
-
   else()
     set(CPACK_GENERATOR "TGZ")
-    if (NOT CPACK_PACKAGING_INSTALL_PREFIX)
-      set(CPACK_PACKAGING_INSTALL_PREFIX "/usr/local/openlase")
-    endif()
     find_program(RPM_EXECUTABLE rpm)
-    find_program(DPKG_DEB_EXECUTABLE dpkg-deb)
     if (RPM_EXECUTABLE)
       list(APPEND CPACK_GENERATOR "RPM")
     else()
       message("Skip RPM package (rpm is not installed)")
     endif()
+
+    find_program(DPKG_DEB_EXECUTABLE dpkg-deb)
     if (DPKG_DEB_EXECUTABLE)
       list(APPEND CPACK_GENERATOR "DEB")
     endif()
@@ -136,6 +167,5 @@ set(CPACK_PACKAGE_NAME "${PROJECT_NAME}")
 set(CPACK_PACKAGE_FILE_NAME "${package_file_name}-${__cpack_system_name}")
 set(CPACK_PACKAGE_INSTALL_DIRECTORY "${package_file_name}")
 set(CPACK_PACKAGE_INSTALL_REGISTRY_KEY "${package_file_name}")
-#set(CPACK_INSTALL_ROOT "C:")
 
 include(CPack)

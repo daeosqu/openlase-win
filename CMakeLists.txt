@@ -16,7 +16,7 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #
 
-cmake_minimum_required(VERSION 3.13)
+cmake_minimum_required(VERSION 3.15)
 
 set(PROJECT_NAME "OpenLase")
 string(TOLOWER "${PROJECT_NAME}" PROJECT_NAME_LOWER)
@@ -96,10 +96,12 @@ if(MSVC)
   set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY_DEBUG "${OUTPUT_DIRECTORY}")
   set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY_RELEASE "${OUTPUT_DIRECTORY}")
 else()
-  #add_compile_options("--std=c11")
   set(CMAKE_C_FLAGS_RELEASE "-O3")
   set(CMAKE_CXX_FLAGS_RELEASE "-O3")
-  add_compile_options (-fdiagnostics-color=always)
+  add_compile_options(
+    $<$<COMPILE_LANGUAGE:C>:-fdiagnostics-color=always>
+    $<$<COMPILE_LANGUAGE:CXX>:-fdiagnostics-color=always>
+  )
 endif()
 
 # Set default install prefix

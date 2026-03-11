@@ -24,6 +24,11 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include <stdlib.h>
 #include <stdarg.h>
 #include <string.h>
+#include <ctype.h>
+
+#ifdef _WIN32
+#define strcasecmp _stricmp
+#endif
 
 typedef jack_default_audio_sample_t sample_t;
 typedef jack_nframes_t nframes_t;
@@ -162,20 +167,20 @@ static Point *ps_alloc(int count)
 
 static int bufsize (nframes_t nframes, void *arg)
 {
-	olLog ("the maximum buffer size is now %u\n", nframes);
+	olLog("the maximum buffer size is now %u\n", nframes);
 	return 0;
 }
 
 static int srate (nframes_t nframes, void *arg)
 {
 	jack_rate = nframes;
-	olLog ("Playing back at %u Hz\n", jack_rate);
+	olLog("Playing back at %u Hz\n", jack_rate);
 	return 0;
 }
 
 static void jack_shutdown (void *arg)
 {
-	olLog ("jack_shutdown\n");
+	olLog("jack_shutdown\n");
 }
 
 static int process (nframes_t nframes, void *arg)
@@ -262,11 +267,93 @@ int olInit(int buffer_count, int max_points)
 	return olInit2(&config);
 }
 
+static void ignore_cb(const char *msg)
+{
+	(void)msg;	/* suppress unused warning */
+}
+
+static int parse_verbose_env(void)
+{
+	const char *env;
+	char *end;
+	long val;
+
+	env = getenv("OL_JACK_VERBOSE");
+	if (!env) {
+		return 1;	/* default */
+	}
+
+	while (isspace((unsigned char)*env)) {
+		env++;
+	}
+
+	if (*env == '\0' ||
+		!strcasecmp(env, "no") ||
+		!strcasecmp(env, "false") ||
+		!strcasecmp(env, "n")) {
+		return 0;
+	}
+
+	if (!strcasecmp(env, "yes") ||
+		!strcasecmp(env, "true") ||
+		!strcasecmp(env, "y")) {
+		return 2;
+	}
+
+	val = strtol(env, &end, 10);
+	if (end && *end == '\0') {
+		if (val < 0) val = 0;
+		if (val > 2) val = 2;
+		return (int)val;
+	}
+
+	fprintf(stderr,
+		"Warning: OL_JACK_VERBOSE has invalid value '%s'; using default (2)\n",
+		env);
+	return 2;
+}
+
+static int ensure_open(void) {
+    static const char jack_client_name[] = "libol";
+    jack_status_t status;
+	int verbose;
+
+    if (client)
+        return 0;  // already open
+
+    /* JACK verbose control */
+	verbose = parse_verbose_env();
+	if (verbose == 0) {
+		jack_set_info_function(ignore_cb);
+		jack_set_error_function(ignore_cb);
+	} else if (verbose == 1) {
+		jack_set_info_function(ignore_cb);
+	}
+
+    client = jack_client_open(jack_client_name, JackNullOption, &status);
+    if (!client) {
+        olLog("JACK server not running? (status=%d)\n", status);
+        return -1;
+    }
+
+    jack_rate = jack_get_sample_rate(client);
+    olLog("Connected to JACK (rate=%d)\n", jack_rate);
+
+    // ここで必要ならコールバック登録
+    jack_set_process_callback(client, process, 0);
+    jack_set_buffer_size_callback(client, bufsize, 0);
+    jack_set_sample_rate_callback(client, srate, 0);
+    jack_on_shutdown(client, jack_shutdown, 0);
+
+    return 0;
+}
+
 int olInit2(const OLConfig *config)
 {
 	int i;
-	static const char jack_client_name[] = "libol";
-	jack_status_t jack_status;
+
+    if (ensure_open() < 0)
+        return -1;
 
 	if (config->buffer_count < 2)
 		return -1;
@@ -306,16 +393,6 @@ int olInit2(const OLConfig *config)
 		frames[i].audio_r = malloc(frames[i].pmax * sizeof(float));
 	}
 
-	if ((client = jack_client_open(jack_client_name, JackNullOption, &jack_status)) == 0) {
-		olLog ("jack server not running?\n");
-		return -1;
-	}
-
-	jack_set_process_callback (client, process, 0);
-	jack_set_buffer_size_callback (client, bufsize, 0);
-	jack_set_sample_rate_callback (client, srate, 0);
-	jack_on_shutdown (client, jack_shutdown, 0);
-
 	out_x[0] = jack_port_register (client, "out_x", JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
 	out_y[0] = jack_port_register (client, "out_y", JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
 	out_r[0] = jack_port_register (client, "out_r", JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
@@ -338,7 +415,7 @@ int olInit2(const OLConfig *config)
 	out_ar = jack_port_register (client, "out_ar", JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
 
 	if (jack_activate (client)) {
-		olLog ("cannot activate client");
+		olLog("cannot activate client\n");
 		return -1;
 	}
 
@@ -384,6 +461,7 @@ void olGetRenderParams(OLRenderParams *sp)
 void olShutdown(void)
 {
 	jack_client_close (client);
+	client = NULL;
 }
 
 void olBegin(int prim)
@@ -1277,5 +1355,18 @@ void olLog(const char *fmt, ...)
 
 void olSetLogCallback(LogCallbackFunc f)
 {
-	log_cb = f;
+        log_cb = f;
+}
+
+int olGetJackRate(void)
+{
+	int rate;
+
+	if (ensure_open() < 0)
+		return 0;
+
+	rate = jack_get_sample_rate(client);
+	olLog("olGetJackRate: jack_get_sample_rate returned %d\n", rate);
+
+	return rate;
 }

@@ -1,65 +1,105 @@
-if(NOT Python3_FOUND OR NOT Python3_LIBRARIES)
-  message(STATUS "Will NOT build python3 bindings (python or python libraries missing)")
-else()
-  execute_process(COMMAND ${Python3_EXECUTABLE} -m cython --version RESULT_VARIABLE rv OUTPUT_QUIET ERROR_QUIET)
-  if(NOT rv STREQUAL "0")
-    message(FATAL_ERROR "Cython not found. please install cython:\n ${Python3_EXECUTABLE} -m pip install cython")
-  endif()
+cmake_minimum_required(VERSION 3.15)
 
-  configure_file(${CMAKE_CURRENT_SOURCE_DIR}/config.pxi.in ${CMAKE_CURRENT_BINARY_DIR}/config.pxi)
+# ============================================================
+# Python bindings (pylase)
+# ============================================================
 
-  add_custom_command(OUTPUT pylase.c
-    MAIN_DEPENDENCY pylase.pyx
-    COMMAND ${Python3_EXECUTABLE} -m cython -I ${CMAKE_CURRENT_BINARY_DIR} -o pylase.c "${CMAKE_CURRENT_SOURCE_DIR}/pylase.pyx")
-  list(APPEND ADDITIONAL_MAKE_CLEAN_FILES pylase.c)
+set(Python3_FIND_STRATEGY LOCATION)
+find_package(Python3 COMPONENTS Interpreter REQUIRED)
 
-  add_library(pylase3 MODULE pylase.c)
+# Directory where ol.dll are located for build wheel
+set(LIBOL_LIBRARY_DIR "$<TARGET_FILE_DIR:OpenLase::LibOL>")
 
-  if ("x${CMAKE_BUILD_TYPE}x" STREQUAL "xReleasex")
-    set(_python_executable "${Python3_EXECUTABLE}")
-  else()
-    if (${Python3_EXECUTABLE_DEBUG})
-      set(_python_executable "${Python3_EXECUTABLE_DEBUG}")
-    else()
-      string(REGEX REPLACE [[(\.([eE][xX][eE]|[bB][aA][tT]|[cC][mM][dD]|$))]] [[_d\1]] _python_executable "${Python3_EXECUTABLE}")
-    endif()
-  endif()
+# ------------------------------------------------------------
+# Locate config.pxi.in (adjust this if your repo layout differs)
+# ------------------------------------------------------------
+# Expected layout (recommended):
+#   <repo>/python/CMakeLists.txt          (this file)
+#   <repo>/python/pylase/config.pxi.in
+set(_config_in "${CMAKE_CURRENT_SOURCE_DIR}/pylase/config.pxi.in")
 
-  execute_process(COMMAND ${_python_executable} -c "from distutils.sysconfig import get_config_var; print(get_config_var('EXT_SUFFIX'))"
-    RESULT_VARIABLE OL_PYTHON3_EXT_SUFFIX_PROCESS
-    OUTPUT_VARIABLE OL_PYTHON3_EXT_SUFFIX
-    OUTPUT_STRIP_TRAILING_WHITESPACE)
-
-  set_target_properties(pylase3 PROPERTIES
-    PREFIX ""
-    OUTPUT_NAME "pylase"
-    SUFFIX ${OL_PYTHON3_EXT_SUFFIX}
-    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-
-  target_include_directories(pylase3 PRIVATE ${Python3_INCLUDE_DIRS})
-  target_link_directories(pylase3 PRIVATE ${Python3_LIBRARY_DIRS})
-  target_link_libraries(pylase3 OpenLase::LibOL ${Python3_LIBRARIES})
-
-  if (MSVC)
-    # for development.
-    # copy ol.dll and libjack*.dll.
-    # for reason, see https://docs.python.org/ja/3/whatsnew/3.8.html#ctypes
-    add_custom_command(TARGET pylase3 POST_BUILD
-      COMMAND ${CMAKE_COMMAND} -E copy_if_different
-      $<TARGET_FILE:OpenLase::LibOL> ${JACK_LIBRARY_DLL}
-      ${CMAKE_CURRENT_BINARY_DIR}
-      COMMAND_EXPAND_LISTS)
-  endif()
-
-  # Do not install to the python site module path
-  # install(FILES ${CMAKE_CURRENT_BINARY_DIR}/pylase${OL_PYTHON3_EXT_SUFFIX} DESTINATION ${Python3_SITELIB})
-
-  # Install to bin of the install destination instead
-  install(TARGETS pylase3 LIBRARY DESTINATION bin COMPONENT Applications)
-
-  unset(OL_PYTHON3_EXT_SUFFIX_PROCESS)
-  unset(OL_PYTHON3_EXT_SUFFIX)
-
+if(NOT EXISTS "${_config_in}")
+  message(FATAL_ERROR
+    "config.pxi.in not found: ${_config_in}\n"
+    "Fix _config_in to match your repo layout."
+  )
 endif()
 
-install(FILES svg.py DESTINATION bin COMPONENT Applications)
+if(NOT Python3_FOUND OR NOT Python3_LIBRARIES)
+
+  message(STATUS "Will NOT build python3 bindings (python or python libraries missing)")
+
+else()
+
+  # Generate config.pxi for Cython include ("include \"config.pxi\"")
+  configure_file(
+    "${_config_in}"
+    "${CMAKE_CURRENT_BINARY_DIR}/config.pxi"
+    @ONLY
+  )
+
+  # ------------------------------------------------------------
+  # Build extension (.pyd) via setup.py for development (no wheel)
+  #
+  # Purpose:
+  #   Build the Cython extension module directly into the build tree
+  #   so that Python code can be executed from the source/build
+  #   directory without installing a wheel.
+  # ------------------------------------------------------------
+  execute_process(
+    COMMAND "${Python3_EXECUTABLE}" -c "import Cython"
+    RESULT_VARIABLE PYLASE_CYTHON_IMPORT_RESULT
+    OUTPUT_QUIET
+    ERROR_QUIET
+  )
+
+  if(NOT PYLASE_CYTHON_IMPORT_RESULT EQUAL 0)
+    message(FATAL_ERROR
+      "Cython is required, but it was not found in ${Python3_EXECUTABLE}. "
+      "Install it with: ${Python3_EXECUTABLE} -m pip install Cython"
+    )
+  endif()
+
+  add_custom_target(pylase_pyd ALL
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_BINARY_DIR}"
+    COMMAND ${CMAKE_COMMAND} -E env
+    "PYLASE_VERSION=${OPENLASE_VERSION}"
+    "LIBOL_DLL=$<TARGET_FILE:OpenLase::LibOL>"
+    "OPENLASE_BUILD_DIR=${CMAKE_BINARY_DIR}"
+    "OPENLASE_SOURCE_DIR=${CMAKE_SOURCE_DIR}"
+    ${Python3_EXECUTABLE} setup.py
+    build_ext
+    --build-lib "${CMAKE_CURRENT_BINARY_DIR}"
+    --build-temp "${CMAKE_CURRENT_BINARY_DIR}/_setuptools/temp"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+    COMMENT "Building pylase extension via setup.py"
+  )
+
+  # Ensure OpenLase core library is built first (setup.py links against it)
+  # Note: OpenLase::LibOL must be defined by the parent CMake project.
+  add_dependencies(pylase_pyd OpenLase::LibOL)
+
+  # ------------------------------------------------------------
+  # Build wheel (.whl) via python -m build
+  # ------------------------------------------------------------
+  add_custom_target(pylase_wheel ALL
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_BINARY_DIR}"
+    COMMAND ${CMAKE_COMMAND} -E env
+    "PYLASE_VERSION=${OPENLASE_VERSION}"
+    "LIBOL_DLL=$<TARGET_FILE:OpenLase::LibOL>"
+    "OPENLASE_BUILD_DIR=${CMAKE_BINARY_DIR}"
+    "OPENLASE_SOURCE_DIR=${CMAKE_SOURCE_DIR}"
+    ${Python3_EXECUTABLE} -m build --wheel --outdir "${CMAKE_BINARY_DIR}/dist"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+    COMMENT "Building pylase extension via setup.py"
+  )
+
+  # avoid parallel build issues
+  add_dependencies(pylase_wheel pylase_pyd)
+
+  # ------------------------------------------------------------
+  # Install helpers
+  # ------------------------------------------------------------
+  install(FILES svg.py DESTINATION bin COMPONENT Applications)
+
+endif()

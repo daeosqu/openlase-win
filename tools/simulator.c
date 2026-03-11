@@ -169,8 +169,8 @@ static int bufsize (nframes_t nframes, void *arg)
 static int srate (nframes_t nframes, void *arg)
 {
 	rate = nframes;
-	if(rate % 1000) {
-		real_fprintf(stderr, "error: the sample rate should be a multiple of 1000\n");
+	if(rate % 100) {
+		real_fprintf(stderr, "error: the sample rate should be a multiple of 100\n");
 		exit(1);
 	}
 	printf ("Sample rate: %u/sec\n", nframes);
@@ -414,7 +414,7 @@ int main (int argc, char *argv[])
 	setvbuf(stdout, NULL, _IONBF, 0);
 	setvbuf(stderr, NULL, _IONBF, 0);
 
-	while ((optchar = getopt(argc, argv, "h?vqFr:s:d:")) != -1) {
+    while ((optchar = getopt(argc, argv, "h?vqFr:s:d")) != -1) {
 		switch (optchar) {
 			case 'h':
 			case '?':
@@ -455,6 +455,13 @@ int main (int argc, char *argv[])
 		usage(argv[0]);
 		return 1;
 	}
+
+#ifdef _WIN32
+    if (opt_quiet) {
+        // Free the existing console to hide it
+        FreeConsole();
+    }
+#endif
 
 	if (opt_verbose)
 		fprintf (stderr, "GL frame rate: %.1f FPS\n", framerate);

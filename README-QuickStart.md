@@ -2,28 +2,26 @@
 
 Quick start manual for OpenLase-win
 
-# Requirements
+## Requirements
 
 Install OpenLase-win and download and install required software.
 
 - [JACK 1.9.22 win64](https://github.com/jackaudio/jack2-releases/releases/download/v1.9.22/jack2-win64-v1.9.22.exe) JACK Audio Connection Kit for Windows 64bit
-- AutoHotkey
+- AutoHotkey (v1)
 - Python3.11 (C:\opt\python311)
 - FFmpeg (`scoop install ffmpeg`)
 - [laserdock_jack](https://github.com/daeosqu/laserdock_jack.git) if you have LaserCube
 
-# Setup QjackCtl
+## Setup QjackCtl
 
 1. Run `qjackctl` (`C:/Program Files/JACK2/qjackctl/qjackctl.exe`)
-1. Push `Patchbay...` button.
-  1. Push `Load...` button.
-    1. Load 
-    1. Push `Activate` button.
+1. Push `Patchbay...` button and load `config/openlase-no-ab-matrix.xml`.
+  1. Push `Activate` button.
 1. Push `Setup...` button.
   1. Set `Driver` to `portaudio` in Settings tab.
   1. Set parameters.
     - Sample Rate: 48000
-    - Frames/Period: 1024
+    - Frames/Period: 128
   1. Check `Start JACK audio server on application startup` in Misc tab.
   1. `Option` tab.
     1. Check `Activate Patchbay persistence` in Misc tab.
@@ -32,93 +30,122 @@ Install OpenLase-win and download and install required software.
 
 Important: Samplerate and bitrate must be same as windows audio device.
 
-# Run openlase terminal
+Parameters:
 
-Start openlase-x.x.x in start menu or execute `source /usr/local/openlase/bin/openlase.sh` for bash.
+| Parameter                   | Value     |          |
+|-----------------------------|-----------|----------|
+| Driver                      | portaudio |          |
+| Realtime                    | YES       |          |
+| Interface                   | (default) |          |
+| Sample Rate                 | 48000     |          |
+| Frames/Period               | 32        | 32 - 256 |
+| Periods/Buffer              | (default) |          |
+| Use server synchronous mode | YES       |          |
+| Verbose message             | YES       |          |
 
-# Setup (first time)
+Advanced tab:
 
-Install required python packages.
+| Parameter         | Value                                          |
+|-------------------|------------------------------------------------|
+| Server Prefix     | jackd -S                                       |
+| No Memory Lock    | NO                                             |
+| Unlock Memory     | NO                                             |
+| Audio             | Duplex                                         |
+| Dither            | None                                           |
+| Output Device     | (default)                                      |
+| Input Device      | (default)                                      |
+| Self connect mode | Don't restrict self connect requests (default) |
+| Other Parameters  | (default)                                      |
 
-```powershel
-python -m pip install click jaconv yt_dlp ffmpeg-python tinydb pillow opencv-contrib-python
-```
 
-# Start OpenLase environment
+## Setup windows from OpenLase installer
+
+1. Run `openlase-X.Y.Z-win64.exe` or `openlase-X.Y.Z-win64.msi`
+1. Run `Openlase-X.Y.Z` from start menu.
+1. Install wheel package with pip (optional, if you want python extension)
+  ```
+  pip install c:\program files\openlase-X.Y.Z\share\openlase\wheel\pylase-X.Y.Z.2-cp39-abi3-win_amd64.whl
+  ```
+
+## Start OpenLase environment
+
+Type `olstart` in Openlase terminal to start OpenLase environment. This will start Jack Audio server and simulator.
 
 ```powershel
 olstart
 ```
 
-# Run simple exaple
+## Run simple exaple
 
 ```
 simple
 ```
 
-# Play bad Apple
+## Play bad Apple
+
+動画をダウンロードするには `oldownload` コマンドを使用します。
 
 ```
 oldownload "https://www.nicovideo.jp/watch/sm8628149"
-playvid (Get-Item $env:OL_DATA_DIR\media\*Bad_Apple*Shadow*.mp4)
+playvid (Get-Item $env:OL_DATA_DIR\media\*sm8628149*.mp4)
 ```
 
-# Bad Apple (Color)
+ダウンロードに失敗する場合は [Upgrade yt_dlp](#upgrade-yt_dlp) を参照してください。
+
+## Bad Apple (Color)
+
+Youtube の場合は ID を指定してダウンロードできます。
 
 ```
 oldownload "uOyaCOViAPA"
 qplayvid (Get-Item $env:OL_DATA_DIR\media\*Bad_Apple*Color*.mp4)
 ```
 
-# oldownload
-
-Download youtube video into OL_DATA_DIR (~/.cache/openlase/media).
+## oldownload
 
 ```
-PS> oldownload "https://www.youtube.com/watch?v=a6-MraffDlE"
-C:\Users\daisuke\.cache\openlase\media\003.a6-MraffDlE.MMD_ねこみみスイッチ_with_HachiBee.mp4
+(venv) PS D:\oldev4\openlase-win-dev> oldownload -h
+Usage: oldownload.py [OPTIONS] [ARGS]...
+
+Options:
+  -l, --list              List media files
+  -t, --title             List media titles
+  -p, --play, --playvid2  Play media files with playvid2
+  -P, --playvid           Play media files with playvid
+  -Q, --qplayvid          Play media files with qplayvid
+  -c, --command TEXT      Play media files with specified command
+  --migrate               Migrate database
+  --force-convert         Force convert
+  --force-convert-all     Force convert all
+  -v, --verbose           Show detailed metadata before the filename
+  --json                  Output entries as JSON
+  --id                    Print filenames with id
+  -h, --help              Show this message and exit.
 ```
 
-Or, simply specify id.
+Forward extra options to the playback tool by placing them after `--`. The
+arguments after the separator are passed directly to the selected player.
 
 ```
-PS> oldownload "a6-MraffDlE"
+oldownload -Q "https://www.youtube.com/watch?v=a6-MraffDlE" -- -p
 ```
 
-List files downloaded by oldownload.
+Play multiple videos by ID with extra options (`--` indicates the pass-through of options to the player).
 
 ```
-PS> oldownload -l
-C:\Users\daisuke\.cache\openlase\media\001.uOyaCOViAPA.MMD_Bad_Apple___Now_in_3D_with_more_Color～.mp4
-C:\Users\daisuke\.cache\openlase\media\002.sm8628149.［Touhou］_Bad_Apple___PV_［Shadow］.mp4
-C:\Users\daisuke\.cache\openlase\media\003.a6-MraffDlE.MMD_ねこみみスイッチ_with_HachiBee.mp4
-
+016,028,039,057,061,076,094,099,102 | % { oldownload -Q --id $_ -v -- -p }
 ```
 
-Download and print filename.
+## Upgrade yt_dlp
+
+If you get error like below, upgrade yt_dlp.
 
 ```
-PS> oldownload "https://www.youtube.com/watch?v=a6-MraffDlE"
-C:\Users\daisuke\.cache\openlase\media\003.a6-MraffDlE.MMD_ねこみみスイッチ_with_HachiBee.mp4
+WARNING: [youtube] XXXXXXXXXXXX: Signature extraction failed: Some formats may be missing
 ```
 
-Print filename by id.
-
 ```
-PS> oldownload --id 3
-C:\Users\daisuke\.cache\openlase\media\003.a6-MraffDlE.MMD_ねこみみスイッチ_with_HachiBee.mp4
-```
-
-Download and run playvid immediately.
-
-```
-oldownload "https://www.youtube.com/watch?v=a6-MraffDlE" | % { playvid2 $_ }
-```
-
-Or use -p or --play option.
-
-```
-oldownload -p "https://www.youtube.com/watch?v=a6-MraffDlE"
+pip install -U yt_dlp
 ```
 
 # ugoira
@@ -153,30 +180,29 @@ https://www.pixiv.net/artworks/<ID> でブラウザで確認してください�
 実機 (LaserCube) で投影するには laserdock_jack.exe を使用します。
 simulator を使用した場合と異なるのは laserdock_jack.exe を実行しておく必要があるのと output.exe を使用することです。 output.exe は映像の歪みなどを補正する事ができます。プロジェクターの台形補正と同じ様に LaserCube が投影する映像を補正するのに利用できます。
 
-1. olstart で Jack Audio と simulator を起動します。
-1. output を実行します。
 1. LaserCube に電源を入れて PC と USB 接続します。
 1. laserdock_jack を実行します。
 1. qplayvid で動画を再生して投影します。
 
 ```
-. "C:\Program Files\JACK2\qjackctl\qjackctl.exe"
-start "C:\Program Files\openlase\bin\output.exe"
 start "C:\Program Files\lasershark_hostapp\bin\laserdock_jack.exe"
 qplayvid $HOME/.cache/openlase/bad_apple.mp4
 ```
 
-# Pylase
+## Sample rate overrides
 
-OpenLase の python バインディングを使ったサンプルを実行します。
+OpenLase components now derive their audio playback rate directly from the active JACK server via `olGetJackRate()`.
+Set `OL_SAMPLE_RATE` to control the renderer rate supplied to OpenLase. The decoded audio output rate automatically follows the JACK server configuration and no longer needs an `OL_AUDIO_RATE` override.
 
-NOTE: Python3.8 以降は DLL 探索に環境変数 PATH を使用しません。pylase のロードの前に `os.add_dll_directory("C:\\windows")` とするか、jack.dll を `C:\Program Files\openlase-x.x.x\bin` にコピーします(読み込まれる pylase.cp311-win_amd64.pyd と同じディレクトリ)。
+- ✅ `tools/qplayvid` (C): reads `OL_SAMPLE_RATE` and queries JACK for the audio rate, warning if `OL_AUDIO_RATE` is set.
+- ✅ `python -m pylase.qplayvid`: mirrors the C player by warning about `OL_AUDIO_RATE` and probing JACK through `pylase.olGetJackRate()`.
+- ❌ `tools/playvid`: still fixed at 48 kHz (pending update).
 
-```
-python "C:\Program Files\openlase\bin\simple.py"
-```
+環境変数 OL_SAMPLE_RATE はレーザー出力デバイスの DAC のサンプリングレートを指定します。通常 20000 ～ 48000 程度です。デフォルトは 48000 です。Jack Audio のサンプリングレートよりも高くすると転送が間に合わなくなり、レーザーの描画が乱れます。DAC のサンプリングレートを超えないように注意してください。DAC に負荷がかかりすぎると破損する可能性があります。一般的には多少超えても問題ありませんが、描画精度が落ちる可能性があります（特に鋭角な動き）。
 
-# Programs
+環境変数 OL_AUDIO_RATE は非推奨になりました。指定しても警告が表示され、JACK サーバーの現在のサンプリングレート (`olGetJackRate()` / `pylase.olGetJackRate()`) が自動的に使用されます。JACK が停止している場合は `OL_SAMPLE_RATE` の値へフォールバックします。
+
+## Extras
 
 | name              | description                                                                                        |
 |-------------------|----------------------------------------------------------------------------------------------------|

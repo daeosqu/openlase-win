@@ -675,12 +675,13 @@ void player_event_cb(PlayerEvent *ev)
 void usage(const char *argv0)
 {
 	fprintf(stderr, "Usage: %s [options] inputfile\n\n", argv0);
-	fprintf(stderr, "Options:\n");
-	fprintf(stderr, "  -h|?          Help\n");
-	fprintf(stderr, "  -q            Decrease verbosity (max -qq)\n");
-	fprintf(stderr, "  -v            Increase verbosity (max -vvvv)\n");
-	fprintf(stderr, "  -a            Auto playing mode\n");
-	fprintf(stderr, "  -A            Auto playing mode without quit\n");
+fprintf(stderr, "Options:\n");
+fprintf(stderr, "  -h|?          Help\n");
+fprintf(stderr, "  -q            Decrease verbosity (max -qq)\n");
+fprintf(stderr, "  -v            Increase verbosity (max -vvvv)\n");
+fprintf(stderr, "  -a            Start playback automatically\n");
+fprintf(stderr, "  -p            Auto play and quit after playback\n");
+fprintf(stderr, "  -d            Enable FFmpeg decoder debug logs\n");
 }
 
 int main (int argc, char *argv[])

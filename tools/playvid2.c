@@ -44,6 +44,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include <libavutil/frame.h>
 #include <libavutil/opt.h>
 #include <libavutil/pixfmt.h>
+#include <libavutil/channel_layout.h>
 #include <libswscale/swscale.h>
 
 #ifdef _MSC_VER
@@ -200,33 +201,23 @@ def_ol_print(debug, DEBUG);
 
 size_t decode_audio(PlayerCtx *ctx, AVPacket *packet, int new_packet, int32_t seekid)
 {
-	int decoded, got_frame;
+	int got_frame;
+	int ret;
 
 	ctx->a_frame = av_frame_alloc();
-	ctx->a_frame->nb_samples = AVCODEC_MAX_AUDIO_FRAME_SIZE;
-	ctx->a_codec_ctx->get_buffer2(ctx->a_codec_ctx, ctx->a_frame, 0);
-#if 1
-    /* avcodec_decode_audio4 is deprecated https://github.com/pesintta/vdr-plugin-vaapidevice/issues/32 */
-	decoded = avcodec_decode_audio4(ctx->a_codec_ctx, ctx->a_frame, &got_frame, packet);
-    if (decoded > 0)
-        got_frame = TRUE;
-#else
-    int ret;
-    char errbuf[AV_ERROR_MAX_STRING_SIZE] = "";
-    decoded = 0;
-    ret = avcodec_receive_frame(ctx->a_codec_ctx, ctx->a_frame);
-    if (ret == 0)
-        got_frame = TRUE;
-    if (ret == AVERROR(EAGAIN))
-        ret = 0;
-    if (ret == 0)
-        ret = avcodec_send_packet(ctx->a_codec_ctx, packet);
-    if (ret == AVERROR(EAGAIN))
-        ret = 0;
-    else if (ret < 0) {
-        ol_err("avcodec_send_packet: %s\n", av_make_error_string(errbuf, sizeof(errbuf), ret));
-    }
-#endif
+	ret = avcodec_send_packet(ctx->a_codec_ctx, packet);
+	if (ret < 0) {
+		ol_err("Error while sending audio packet\n");
+		goto fail;
+	}
+	ret = avcodec_receive_frame(ctx->a_codec_ctx, ctx->a_frame);
+	if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF)
+		goto fail;
+	if (ret < 0) {
+		ol_err("Error while decoding audio frame\n");
+		goto fail;
+	}
+	got_frame = TRUE;
 	if (!got_frame) {
 		ol_err("Error while decoding audio frame\n");
 		goto fail;
@@ -289,7 +280,7 @@ size_t decode_audio(PlayerCtx *ctx, AVPacket *packet, int new_packet, int32_t se
 fail:
 	av_frame_free(&ctx->a_frame);
 	ctx->a_frame = NULL;
-	return decoded;
+	return packet->size;
 }
 
 VideoFrame* get_output_frame(PlayerCtx *ctx, int scaled_width, int scaled_height) {
@@ -344,8 +335,8 @@ void save_avframe_ppm(const char* filename, uint8_t* data, int width, int height
 
 size_t decode_video(PlayerCtx *ctx, AVPacket *packet, int new_packet, int32_t seekid)
 {
-	int decoded;
 	int got_frame;
+	int ret;
 
 	if (!new_packet)
 		ol_warn("warn: multi-frame video packets, pts might be inaccurate\n");
@@ -353,12 +344,19 @@ size_t decode_video(PlayerCtx *ctx, AVPacket *packet, int new_packet, int32_t se
 	ctx->v_pkt_pts = packet->pts;
 
 	ctx->v_frame = av_frame_alloc();
-	decoded = avcodec_decode_video2(ctx->v_codec_ctx, ctx->v_frame, &got_frame, packet);
-	if (decoded < 0) {
-		ol_err("Error while decoding video frame\n");
-		decoded = packet->size;
+	ret = avcodec_send_packet(ctx->v_codec_ctx, packet);
+	if (ret < 0) {
+		ol_err("Error while sending video packet\n");
 		goto fail;
 	}
+	ret = avcodec_receive_frame(ctx->v_codec_ctx, ctx->v_frame);
+	if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF)
+		goto fail;
+	if (ret < 0) {
+		ol_err("Error while decoding video frame\n");
+		goto fail;
+	}
+	got_frame = TRUE;
 	if (!got_frame)
 		goto fail;
 
@@ -397,7 +395,7 @@ size_t decode_video(PlayerCtx *ctx, AVPacket *packet, int new_packet, int32_t se
              SWS_BICUBIC,
              NULL, NULL, NULL);
         int ret;
-        ret = sws_scale(ctx->color_sws_ctx, (const uint8_t**)ctx->v_frame->data, ctx->v_frame->linesize, 0, ctx->v_codec_ctx->height, picFrame.data, picFrame.linesize);
+        ret = sws_scale(ctx->color_sws_ctx, (const uint8_t * const *)ctx->v_frame->data, ctx->v_frame->linesize, 0, ctx->v_codec_ctx->height, picFrame.data, picFrame.linesize);
         if (ret < 0) {
             ol_err("sws_scale failed\n");
         } else {
@@ -409,7 +407,7 @@ size_t decode_video(PlayerCtx *ctx, AVPacket *packet, int new_packet, int32_t se
 	// The pts magic guesswork
 	int64_t pts = AV_NOPTS_VALUE;
 	int64_t frame_pts = AV_NOPTS_VALUE;
-	frame_pts = av_frame_get_best_effort_timestamp(ctx->v_frame);
+	frame_pts = ctx->v_frame->best_effort_timestamp;
 
 	if (packet->dts != AV_NOPTS_VALUE) {
 		ctx->v_faulty_dts += packet->dts <= ctx->v_last_dts;
@@ -474,11 +472,12 @@ size_t decode_video(PlayerCtx *ctx, AVPacket *packet, int new_packet, int32_t se
 		scaled_width, scaled_height, AV_PIX_FMT_GRAY8, SWS_BICUBIC,
 		NULL, NULL, NULL);
 
-	AVPicture pict;
+	AVFrame pict;
+	memset(&pict, 0, sizeof(pict));
 	pict.data[0] = frame->data;
 	pict.linesize[0] = frame->stride;
 
-	sws_scale(ctx->v_sws_ctx, (const uint8_t* const*)ctx->v_frame->data, ctx->v_frame->linesize, 0, ctx->height, pict.data, pict.linesize);
+	sws_scale(ctx->v_sws_ctx, (const uint8_t * const *)ctx->v_frame->data, ctx->v_frame->linesize, 0, ctx->height, pict.data, pict.linesize);
 
 	frame->pts = av_q2d(ctx->v_stream->time_base) * pts;
 	frame->seekid = seekid;
@@ -493,7 +492,7 @@ size_t decode_video(PlayerCtx *ctx, AVPacket *packet, int new_packet, int32_t se
 fail:
 	av_frame_free(&ctx->v_frame);
 	ctx->v_frame = NULL;
-	return decoded;
+	return packet->size;
 }
 
 void push_eof(PlayerCtx *ctx, int32_t seekid)
@@ -550,7 +549,7 @@ void *decoder_thread(void *arg)
 		int new_packet = 0;
 		if (cpacket.size == 0) {
 			if (packet.data)
-				av_free_packet(&packet);
+				av_packet_unref(&packet);
 			pthread_mutex_lock(&ctx->seek_mutex);
 			if (ctx->cur_seekid > seekid) {
 				ol_err("Seek! %f\n", ctx->seek_pos);
@@ -633,7 +632,7 @@ int decoder_init(PlayerCtx *ctx, const char *file)
 	pthread_cond_init(&ctx->seek_cond, NULL);
 
 	for (i = 0; i < ctx->fmt_ctx->nb_streams; i++) {
-		switch (ctx->fmt_ctx->streams[i]->codec->codec_type) {
+		switch (ctx->fmt_ctx->streams[i]->codecpar->codec_type) {
 			case AVMEDIA_TYPE_VIDEO:
 				if (ctx->video_idx == -1)
 					ctx->video_idx = i;
@@ -654,12 +653,16 @@ int decoder_init(PlayerCtx *ctx, const char *file)
 
 	if (ctx->audio_idx != -1) {
 		ctx->a_stream = ctx->fmt_ctx->streams[ctx->audio_idx];
-		ctx->a_codec_ctx = ctx->a_stream->codec;
-		ctx->a_codec = avcodec_find_decoder(ctx->a_codec_ctx->codec_id);
+		ctx->a_codec = avcodec_find_decoder(ctx->a_stream->codecpar->codec_id);
 		if (ctx->a_codec == NULL) {
 			ol_err("No audio codec\n");
 			return -1;
 		}
+		ctx->a_codec_ctx = avcodec_alloc_context3(ctx->a_codec);
+		if (ctx->a_codec_ctx == NULL)
+			return -1;
+		if (avcodec_parameters_to_context(ctx->a_codec_ctx, ctx->a_stream->codecpar) < 0)
+			return -1;
 		if (avcodec_open2(ctx->a_codec_ctx, ctx->a_codec, NULL) < 0) {
 			ol_err("Failed to open audio codec\n");
 			return -1;
@@ -669,15 +672,31 @@ int decoder_init(PlayerCtx *ctx, const char *file)
 
 #if USE_AVRESAMPLE
 		ctx->a_resampler = avresample_alloc_context();
-#else
-		ctx->a_resampler = swr_alloc();
-#endif
-		av_opt_set_int(ctx->a_resampler, "in_channel_layout", ctx->a_codec_ctx->channel_layout, 0);
+		int64_t in_ch_layout = av_get_default_channel_layout(ctx->a_codec_ctx->ch_layout.nb_channels);
+		av_opt_set_int(ctx->a_resampler, "in_channel_layout", in_ch_layout, 0);
 		av_opt_set_int(ctx->a_resampler, "out_channel_layout", AV_CH_LAYOUT_STEREO, 0);
 		av_opt_set_int(ctx->a_resampler, "in_sample_rate", ctx->a_codec_ctx->sample_rate, 0);
 		av_opt_set_int(ctx->a_resampler, "out_sample_rate", SAMPLE_RATE, 0);
 		av_opt_set_int(ctx->a_resampler, "in_sample_fmt", ctx->a_codec_ctx->sample_fmt, 0);
 		av_opt_set_int(ctx->a_resampler, "out_sample_fmt", AV_SAMPLE_FMT_S16, 0);
+#else
+		ctx->a_resampler = NULL;
+		AVChannelLayout out_ch_layout;
+		av_channel_layout_default(&out_ch_layout, 2);
+		if (swr_alloc_set_opts2(&ctx->a_resampler,
+					&out_ch_layout,
+					AV_SAMPLE_FMT_S16,
+					SAMPLE_RATE,
+					&ctx->a_codec_ctx->ch_layout,
+					ctx->a_codec_ctx->sample_fmt,
+					ctx->a_codec_ctx->sample_rate,
+					0,
+					NULL) < 0) {
+			av_channel_layout_uninit(&out_ch_layout);
+			return -1;
+		}
+		av_channel_layout_uninit(&out_ch_layout);
+#endif
 #if USE_AVRESAMPLE
 		if (avresample_open(ctx->a_resampler))
 #else
@@ -700,15 +719,18 @@ int decoder_init(PlayerCtx *ctx, const char *file)
 	}
 
 	ctx->v_stream = ctx->fmt_ctx->streams[ctx->video_idx];
-	ctx->v_codec_ctx = ctx->v_stream->codec;
-	ctx->width = ctx->v_codec_ctx->width;
-	ctx->height = ctx->v_codec_ctx->height;
-
-	ctx->v_codec = avcodec_find_decoder(ctx->v_codec_ctx->codec_id);
+	ctx->v_codec = avcodec_find_decoder(ctx->v_stream->codecpar->codec_id);
 	if (ctx->v_codec == NULL) {
 		ol_err("No video codec\n");
 		return -1;
 	}
+	ctx->v_codec_ctx = avcodec_alloc_context3(ctx->v_codec);
+	if (ctx->v_codec_ctx == NULL)
+		return -1;
+	if (avcodec_parameters_to_context(ctx->v_codec_ctx, ctx->v_stream->codecpar) < 0)
+		return -1;
+	ctx->width = ctx->v_codec_ctx->width;
+	ctx->height = ctx->v_codec_ctx->height;
 
 	if (avcodec_open2(ctx->v_codec_ctx, ctx->v_codec, NULL) < 0) {
 		ol_err("Failed to open video codec\n");
@@ -1282,7 +1304,6 @@ int player_init(PlayerCtx *ctx)
 
 void playvid_init(void)
 {
-	av_register_all();
 	avdevice_register_all();
 }
 

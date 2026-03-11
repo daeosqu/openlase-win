@@ -27,6 +27,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include <string.h>
 #include <stdlib.h>
 #include <jack/jack.h>
+#include <limits.h>
 #include <math.h>
 #include <pthread.h>
 
@@ -44,12 +45,14 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include <libavutil/opt.h>
 #include <libavutil/pixfmt.h>
 #include <libavutil/pixdesc.h>
+#include <libavutil/channel_layout.h>
 #include <libswscale/swscale.h>
+
+#include <libol/text.h>
 
 #define OL_FRAMES_BUF 5
 #define VIDEO_BUF 32
 
-#define SAMPLE_RATE 48000
 #define AUDIO_BUF 3
 
 #ifndef AVCODEC_MAX_AUDIO_FRAME_SIZE
@@ -72,6 +75,9 @@ typedef struct {
 	int width, height;
 	int pix_fmt;
 	struct SwsContext *sws_ctx;
+	int is_burn;
+	int burn_x;
+	int burn_y;
 } VideoFrame;
 
 typedef struct {
@@ -192,6 +198,10 @@ struct OLTraceCtx {
 	unsigned int pb_size;
 };
 
+// Global variables
+
+Font *font;
+
 // Global options
 
 int playvid_opt_verbose = 0;
@@ -233,18 +243,74 @@ def_ol_print(verbose, VERBOSE);
 def_ol_print(debug, DEBUG);
 def_ol_print(debug2, DEBUG2);
 
+static int g_ol_sample_rate = 48000;
+static int g_ol_audio_rate = 48000;
+
+static int parse_rate_env(const char *name, int fallback)
+{
+	const char *value = getenv(name);
+	char *end = NULL;
+	long parsed;
+
+	if (!value || !*value)
+		return fallback;
+
+	errno = 0;
+	parsed = strtol(value, &end, 10);
+	if (errno || !end || *end || parsed <= 0 || parsed > INT_MAX) {
+		ol_warn("Invalid %s value \"%s\", using %d\n", name, value, fallback);
+		return fallback;
+	}
+
+	return (int)parsed;
+}
+
+static void ensure_sample_rates(void)
+{
+        static int initialized = 0;
+
+        if (initialized)
+                return;
+        initialized = 1;
+
+        g_ol_sample_rate = parse_rate_env("OL_SAMPLE_RATE", 48000);
+        const char *audio_env = getenv("OL_AUDIO_RATE");
+        if (audio_env && *audio_env)
+                ol_warn("Ignoring OL_AUDIO_RATE=%s; using JACK server rate instead\n", audio_env);
+
+        int jack_rate = olGetJackRate();
+        if (jack_rate <= 0) {
+                ol_warn("Unable to query JACK sample rate, defaulting audio playback to %d Hz\n", g_ol_sample_rate);
+                jack_rate = g_ol_sample_rate;
+        }
+
+        g_ol_audio_rate = jack_rate;
+
+        ol_info("Using OL_SAMPLE_RATE=%d, JACK audio rate=%d\n", g_ol_sample_rate, g_ol_audio_rate);
+}
+
 
 size_t decode_audio(PlayerCtx *ctx, AVPacket *packet, int new_packet, int32_t seekid)
 {
-	int decoded, got_frame;
+	int got_frame;
+	int ret;
 
 	ctx->a_frame = av_frame_alloc();
-	ctx->a_frame->nb_samples = AVCODEC_MAX_AUDIO_FRAME_SIZE;
-	ctx->a_codec_ctx->get_buffer2(ctx->a_codec_ctx, ctx->a_frame, 0);
-	decoded = avcodec_decode_audio4(ctx->a_codec_ctx, ctx->a_frame, &got_frame, packet);
+	ret = avcodec_send_packet(ctx->a_codec_ctx, packet);
+	if (ret < 0) {
+		ol_err("Error while sending audio packet\n");
+		goto fail;
+	}
+	ret = avcodec_receive_frame(ctx->a_codec_ctx, ctx->a_frame);
+	if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF)
+		goto fail;
+	if (ret < 0) {
+		ol_err("Error while decoding audio frame\n");
+		goto fail;
+	}
+	got_frame = 1;
 	if (!got_frame) {
 		ol_err("Error while decoding audio frame\n");
-		decoded = packet->size;
 		goto fail;
 	}
 	int in_samples = ctx->a_frame->nb_samples;
@@ -258,7 +324,7 @@ size_t decode_audio(PlayerCtx *ctx, AVPacket *packet, int new_packet, int32_t se
 #else
 	int out_samples = swr_convert(ctx->a_resampler,
 		(uint8_t **)ctx->a_resample_output, AVCODEC_MAX_AUDIO_FRAME_SIZE,
-		(const uint8_t**)ctx->a_frame->data, in_samples);
+		(const uint8_t * const *)ctx->a_frame->data, in_samples);
 #endif
 	pthread_mutex_lock(&ctx->a_buf_mutex);
 
@@ -289,7 +355,7 @@ size_t decode_audio(PlayerCtx *ctx, AVPacket *packet, int new_packet, int32_t se
 		ctx->a_buf[put].seekid = seekid;
 		ctx->a_buf[put].pts = ctx->a_cur_pts;
 		put++;
-		ctx->a_cur_pts += 1.0/SAMPLE_RATE;
+		ctx->a_cur_pts += 1.0/g_ol_audio_rate;
 		if (put == ctx->a_buf_len)
 			put = 0;
 	}
@@ -304,7 +370,7 @@ size_t decode_audio(PlayerCtx *ctx, AVPacket *packet, int new_packet, int32_t se
 fail:
 	av_frame_free(&ctx->a_frame);
 	ctx->a_frame = NULL;
-	return decoded;
+	return packet->size;
 }
 
 void adjust_size_shrink(int iw, int ih, int w, int h, int* ow, int* oh)
@@ -394,7 +460,7 @@ VideoFrame* get_scaled_frame(PlayerCtx *ctx, VideoFrameBuffer *vfb, int width, i
 		(pframe,
 		 &vfb->sws_ctx,
 		 ctx->v_codec_ctx->pix_fmt,
-		 (const uint8_t**)ctx->v_frame->data,
+		 (const uint8_t * const *)ctx->v_frame->data,
 		 ctx->v_frame->linesize,
 		 ctx->width,
 		 ctx->height,
@@ -496,14 +562,15 @@ uint8_t* update_debug_image(PlayerCtx *ctx, OLTraceCtx *trace_ctx, OLTraceParams
 	desc = av_pix_fmt_desc_get(pix_fmt_out);
 	bps_out = (av_get_bits_per_pixel(desc) + 7) / 8;
 
-	AVPicture pic;
+	AVFrame pic;
+	memset(&pic, 0, sizeof(pic));
 	pic.data[0] = data;
 	pic.linesize[0] = aw * bps_in;
 
 	get_scaled_video_frame(&di->frame,
 						   &di->sws_ctx,
 						   pix_fmt_in,
-						   (const uint8_t**)pic.data,
+						   (const uint8_t * const *)pic.data,
 						   pic.linesize,
 						   aw,
 						   ah,
@@ -512,10 +579,170 @@ uint8_t* update_debug_image(PlayerCtx *ctx, OLTraceCtx *trace_ctx, OLTraceParams
 						   height);
 }
 
+/* Detect burn marker from an RGB24 color frame. */
+static int detect_burn_marker_from_color(const VideoFrame *color, double *out_cx, double *out_cy, double *out_bg_ratio, int *out_white_count, double *out_spread)
+{
+    /* init outs */
+    if (out_cx) *out_cx = -1.0;
+    if (out_cy) *out_cy = -1.0;
+    if (out_white_count) *out_white_count = 0;
+    if (out_bg_ratio) *out_bg_ratio = 0.0;
+    if (out_spread) *out_spread = 0.0;
+
+    if (!color || !color->data) {
+		ol_debug("Empty frame\n");
+		return 0;
+	}
+
+	if (color->width <= 0 || color->height <= 0) {
+		ol_debug("Invalid frame size %dx%d\n", color->width, color->height);
+		return 0;
+	}
+
+    if (color->pix_fmt != AV_PIX_FMT_RGB24) {
+		ol_debug("Frame format is not RGB24\n");
+        return 0; /* Expect RGB24 */
+	}
+
+    const int W = color->width;
+    const int H = color->height;
+    const int stride = (int)color->stride;
+    const uint8_t *data = color->data;
+
+    /* ---- Step 1: 10x10 grid bg ratio check ----
+     * Count near-bg (#000 within small tolerance).
+     * Fail if >= 20% are bg.
+     */
+    const int grid = 10;
+    const int total_samples = grid * grid;      /* 100 */
+
+	/* NOTE: 圧縮により #FF00FF が #EA00F5 ぐらいになる事があるので bg_thresh
+	   は大きめにする。 */
+	const int bg[3] = {255,0,255};
+	const double bg_thresh = 30;
+    const double bg_fail_threshold = 0.80;   /* < 80% -> fail */
+
+	const int fg[3] = {255,255,255};
+	const double fg_thresh = 10;
+	const int fg_max_count = 200;
+
+    int bg_count = 0;
+
+    for (int gy = 0; gy < grid; gy++) {
+        int y = (int)((gy + 0.5) * H / grid);
+        if (y >= H) y = H - 1;
+        const uint8_t *row = data + y * stride;
+        for (int gx = 0; gx < grid; gx++) {
+            int x = (int)((gx + 0.5) * W / grid);
+            if (x >= W) x = W - 1;
+            const uint8_t *p = row + x * 3;
+			if (abs(p[0] - bg[0]) < bg_thresh &&
+				abs(p[1] - bg[1]) < bg_thresh &&
+				abs(p[2] - bg[2]) < bg_thresh) {
+                bg_count++;
+            }
+        }
+    }
+
+    const double bg_ratio = (double)bg_count / (double)total_samples;
+
+    if (out_bg_ratio) *out_bg_ratio = bg_ratio;
+
+    if (bg_ratio < bg_fail_threshold) {
+		ol_debug("a %.2f bg ratio, %d\n", bg_ratio, bg_count);
+        return 0; /* too many bg samples */
+    }
+
+    /* ---- Step 2: scan full frame for near-white cluster ----
+     * Near-white: all channels >= 250.
+     * All whites must lie within per-axis limits from the first white.
+     * Limit count to <= 32.
+     * Also compute a normalized spread in [0,1]:
+     *   per-point s = max(dx/dx_lim, dy/dy_lim) clipped to [0,1]
+     *   spread = average(s) over collected whites
+     */
+    /* const int dx_limit = (W / 100) > 0 ? (W / 100) : 1; */
+    /* const int dy_limit = (H / 100) > 0 ? (H / 100) : 1; */
+    const int max_whites = 1000;
+
+    int first_x = -1, first_y = -1;
+    long long sum_x = 0, sum_y = 0;
+    int count = 0;
+    int total_white_value = 0;
+    int too_spread = 0;
+    double spread_sum = 0.0;
+
+    for (int y = 0; y < H; y++) {
+        const uint8_t *row = data + y * stride;
+        for (int x = 0; x < W; x++) {
+            const uint8_t *p = row + x * 3;
+
+            if (abs(p[0] - fg[0]) < fg_thresh &&
+				abs(p[1] - fg[1]) < fg_thresh &&
+				abs(p[2] - fg[2]) < fg_thresh) {
+                if (count == 0) {
+                    first_x = x;
+                    first_y = y;
+                    sum_x += x;
+                    sum_y += y;
+                    count = 1;
+                    /* first point has zero spread contribution */
+					//printf("first white at (%d,%d), (r=%d g=%d b=%d)\n", x, y, p[0], p[1], p[2]);
+                } else {
+                    /* accumulate centroid and metrics */
+                    sum_x += x;
+                    sum_y += y;
+                    count++;
+
+					if (count > fg_max_count) {
+						goto FINISH_WHITE_SCAN;
+					}
+
+                    int adx = x - first_x; if (adx < 0) adx = -adx;
+                    int ady = y - first_y; if (ady < 0) ady = -ady;
+
+                    double nx = (double)adx / (double)W;
+                    double ny = (double)ady / (double)H;
+					double s  = sqrt(nx * nx + ny * ny);
+                    if (s > 1.0) s = 1.0;
+                    spread_sum += s;
+                }
+            }
+        }
+    }
+
+FINISH_WHITE_SCAN:
+	ol_debug("d\n");
+    /* centroid */
+    double cx = (double)sum_x / (double)count;
+    double cy = (double)sum_y / (double)count;
+
+    /* average spread over collected whites (0..1, lower is tighter) */
+    double spread = (count > 1) ? (spread_sum / (double)(count - 1)) : 0.0;
+
+    if (out_cx) *out_cx = cx;
+    if (out_cy) *out_cy = cy;
+    if (out_white_count) *out_white_count = count;
+    if (out_spread) *out_spread = spread;
+    if (count <= 0) {
+        return 0;
+    }
+
+	if (count >= fg_max_count) {
+		return 0;
+	}
+
+	if (spread > 0.02) {
+		return 0;
+	}
+
+    return 1;
+}
+
 size_t decode_video(PlayerCtx *ctx, AVPacket *packet, int new_packet, int32_t seekid)
 {
-	int decoded;
 	int got_frame;
+	int ret;
 
 	if (!new_packet)
 		ol_warn("multi-frame video packets, pts might be inaccurate\n");
@@ -523,19 +750,26 @@ size_t decode_video(PlayerCtx *ctx, AVPacket *packet, int new_packet, int32_t se
 	ctx->v_pkt_pts = packet->pts;
 
 	ctx->v_frame = av_frame_alloc();
-	decoded = avcodec_decode_video2(ctx->v_codec_ctx, ctx->v_frame, &got_frame, packet);
-	if (decoded < 0) {
-		ol_err("Error while decoding video frame\n");
-		decoded = packet->size;
+	ret = avcodec_send_packet(ctx->v_codec_ctx, packet);
+	if (ret < 0) {
+		ol_err("Error while sending video packet\n");
 		goto fail;
 	}
+	ret = avcodec_receive_frame(ctx->v_codec_ctx, ctx->v_frame);
+	if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF)
+		goto fail;
+	if (ret < 0) {
+		ol_err("Error while decoding video frame\n");
+		goto fail;
+	}
+	got_frame = 1;
 	if (!got_frame)
 		goto fail;
 
 	// The pts magic guesswork
 	int64_t pts = AV_NOPTS_VALUE;
 	int64_t frame_pts = AV_NOPTS_VALUE;
-	frame_pts = av_frame_get_best_effort_timestamp(ctx->v_frame);
+	frame_pts = ctx->v_frame->best_effort_timestamp;
 
 	if (packet->dts != AV_NOPTS_VALUE) {
 		ctx->v_faulty_dts += packet->dts <= ctx->v_last_dts;
@@ -581,13 +815,38 @@ size_t decode_video(PlayerCtx *ctx, AVPacket *packet, int new_packet, int32_t se
 	int scaled_height = (int)(ctx->height * ctx->settings.scale / 100);
 	pthread_mutex_unlock(&ctx->settings_mutex);
 
+	// TODO Optimize
 	VideoFrame *frame = get_scaled_frame(ctx, &ctx->gray_vfb, scaled_width, scaled_height);
-	get_scaled_frame(ctx, &ctx->color_vfb, scaled_width, scaled_height);
+	VideoFrame *color = get_scaled_frame(ctx, &ctx->color_vfb, scaled_width, scaled_height);
 
 	// Update frame
-
 	frame->pts = av_q2d(ctx->v_stream->time_base) * pts;
 	frame->seekid = seekid;
+	frame->is_burn = 0;
+	frame->burn_x = -1;
+	frame->burn_y = -1;
+
+	double bx, by, bg_ratio, spread;
+	int count;
+	if (detect_burn_marker_from_color(color, &bx, &by, &bg_ratio, &count, &spread)) {
+		/* ol_debug2("%.2f: Detected burn marker (%.1f, %.1f) (bg ratio: %.3f, fg count: %d, spread: %.4f)\n", */
+		/* 		 frame->pts, bx, by, bg_ratio, count, spread); */
+		//ol_debug("Burn marker detected at (%.1f, %.1f)\n", bx, by);
+		frame->is_burn = 1;
+		frame->burn_x = (int)bx;
+		frame->burn_y = (int)by;
+	} else {
+		fflush(stdout);
+		frame->is_burn = 0;
+		frame->burn_x = -1;
+		frame->burn_y = -1;
+	}
+
+	color->pts = frame->pts;
+	color->seekid = frame->seekid;
+	color->is_burn = frame->is_burn;
+	color->burn_x = frame->burn_x;
+	color->burn_y = frame->burn_y;
 
 	ol_debug2("Put frame %d (pts:%f seekid:%d)\n", ctx->v_buf_put, frame->pts, seekid);
 	pthread_mutex_lock(&ctx->v_buf_mutex);
@@ -599,7 +858,7 @@ size_t decode_video(PlayerCtx *ctx, AVPacket *packet, int new_packet, int32_t se
 fail:
 	av_frame_free(&ctx->v_frame);
 	ctx->v_frame = NULL;
-	return decoded;
+	return packet->size;
 }
 
 void push_eof(PlayerCtx *ctx, int32_t seekid)
@@ -655,7 +914,7 @@ void *decoder_thread(void *arg)
 		int new_packet = 0;
 		if (cpacket.size == 0) {
 			if (packet.data)
-				av_free_packet(&packet);
+				av_packet_unref(&packet);
 			pthread_mutex_lock(&ctx->seek_mutex);
 			if (ctx->cur_seekid > seekid) {
 				ol_debug("Seek! %f\n", ctx->seek_pos);
@@ -700,6 +959,8 @@ int decoder_init(PlayerCtx *ctx, const char *file)
 
 	memset(ctx, 0, sizeof(*ctx));
 
+	ensure_sample_rates();
+
 	ctx->gray_vfb.pix_fmt = AV_PIX_FMT_GRAY8;
 	ctx->color_vfb.pix_fmt = AV_PIX_FMT_RGB24;
 	ctx->debug_vfb.pix_fmt = AV_PIX_FMT_GRAY8;
@@ -735,7 +996,7 @@ int decoder_init(PlayerCtx *ctx, const char *file)
 	pthread_cond_init(&ctx->seek_cond, NULL);
 
 	for (i = 0; i < ctx->fmt_ctx->nb_streams; i++) {
-		switch (ctx->fmt_ctx->streams[i]->codec->codec_type) {
+		switch (ctx->fmt_ctx->streams[i]->codecpar->codec_type) {
 			case AVMEDIA_TYPE_VIDEO:
 				if (ctx->video_idx == -1)
 					ctx->video_idx = i;
@@ -756,30 +1017,51 @@ int decoder_init(PlayerCtx *ctx, const char *file)
 
 	if (ctx->audio_idx != -1) {
 		ctx->a_stream = ctx->fmt_ctx->streams[ctx->audio_idx];
-		ctx->a_codec_ctx = ctx->a_stream->codec;
-		ctx->a_codec = avcodec_find_decoder(ctx->a_codec_ctx->codec_id);
+		ctx->a_codec = avcodec_find_decoder(ctx->a_stream->codecpar->codec_id);
 		if (ctx->a_codec == NULL) {
 			ol_err("No audio codec\n");
 			return -1;
 		}
+		ctx->a_codec_ctx = avcodec_alloc_context3(ctx->a_codec);
+		if (ctx->a_codec_ctx == NULL)
+			return -1;
+		if (avcodec_parameters_to_context(ctx->a_codec_ctx, ctx->a_stream->codecpar) < 0)
+			return -1;
 		if (avcodec_open2(ctx->a_codec_ctx, ctx->a_codec, NULL) < 0) {
 			ol_err("Failed to open audio codec\n");
 			return -1;
 		}
 
-		ol_info("Audio srate: %d\n", ctx->a_codec_ctx->sample_rate);
+		ol_info("Audio input sampling rate: %d\n", ctx->a_codec_ctx->sample_rate);
+                ol_info("Audio output sampling rate (JACK): %d\n", g_ol_audio_rate);
 
 #if USE_AVRESAMPLE
 		ctx->a_resampler = avresample_alloc_context();
-#else
-		ctx->a_resampler = swr_alloc();
-#endif
-		av_opt_set_int(ctx->a_resampler, "in_channel_layout", ctx->a_codec_ctx->channel_layout, 0);
+		int64_t in_ch_layout = av_get_default_channel_layout(ctx->a_codec_ctx->ch_layout.nb_channels);
+		av_opt_set_int(ctx->a_resampler, "in_channel_layout", in_ch_layout, 0);
 		av_opt_set_int(ctx->a_resampler, "out_channel_layout", AV_CH_LAYOUT_STEREO, 0);
 		av_opt_set_int(ctx->a_resampler, "in_sample_rate", ctx->a_codec_ctx->sample_rate, 0);
-		av_opt_set_int(ctx->a_resampler, "out_sample_rate", SAMPLE_RATE, 0);
+		av_opt_set_int(ctx->a_resampler, "out_sample_rate", g_ol_audio_rate, 0);
 		av_opt_set_int(ctx->a_resampler, "in_sample_fmt", ctx->a_codec_ctx->sample_fmt, 0);
 		av_opt_set_int(ctx->a_resampler, "out_sample_fmt", AV_SAMPLE_FMT_S16, 0);
+#else
+		ctx->a_resampler = NULL;
+		AVChannelLayout out_ch_layout;
+		av_channel_layout_default(&out_ch_layout, 2);
+		if (swr_alloc_set_opts2(&ctx->a_resampler,
+					&out_ch_layout,
+					AV_SAMPLE_FMT_S16,
+					g_ol_audio_rate,
+					&ctx->a_codec_ctx->ch_layout,
+					ctx->a_codec_ctx->sample_fmt,
+					ctx->a_codec_ctx->sample_rate,
+					0,
+					NULL) < 0) {
+			av_channel_layout_uninit(&out_ch_layout);
+			return -1;
+		}
+		av_channel_layout_uninit(&out_ch_layout);
+#endif
 #if USE_AVRESAMPLE
 		if (avresample_open(ctx->a_resampler))
 #else
@@ -787,14 +1069,20 @@ int decoder_init(PlayerCtx *ctx, const char *file)
 #endif
 			return -1;
 
-		ctx->a_ratio = SAMPLE_RATE/(double)ctx->a_codec_ctx->sample_rate;
+		ctx->a_ratio = g_ol_audio_rate/(double)ctx->a_codec_ctx->sample_rate;
 
 		ctx->a_resample_output[0] = malloc(2 * sizeof(short) * AVCODEC_MAX_AUDIO_FRAME_SIZE * (ctx->a_ratio * 1.1));
 		ctx->a_resample_output[1] = 0;
-		ctx->a_buf_len = AUDIO_BUF*SAMPLE_RATE;
+		ctx->a_buf_len = AUDIO_BUF*g_ol_audio_rate;
 		ctx->a_buf = malloc(sizeof(*ctx->a_buf) * ctx->a_buf_len);
 		ctx->a_buf_put = 0;
 		ctx->a_buf_get = 0;
+		ol_info("Audio buffer size: %d samples = (AUDIO_BUF=%d) * %d\n", ctx->a_buf_len, AUDIO_BUF, g_ol_audio_rate);
+		ol_info("Audio resample buffer size: %.d samples = 2 * (sizeof(short)=%d) * (AVCODEC_MAX_AUDIO_FRAME_SIZE=%d) * (a_ratio=%.2f)\n",
+				(int)(2 * sizeof(short) * AVCODEC_MAX_AUDIO_FRAME_SIZE * (ctx->a_ratio * 1.1)),
+				sizeof(short),
+				AVCODEC_MAX_AUDIO_FRAME_SIZE,
+				ctx->a_ratio);
 
 		pthread_mutex_init(&ctx->a_buf_mutex, NULL);
 		pthread_cond_init(&ctx->a_buf_not_full, NULL);
@@ -802,15 +1090,19 @@ int decoder_init(PlayerCtx *ctx, const char *file)
 	}
 
 	ctx->v_stream = ctx->fmt_ctx->streams[ctx->video_idx];
-	ctx->v_codec_ctx = ctx->v_stream->codec;
-	ctx->width = ctx->v_codec_ctx->width;
-	ctx->height = ctx->v_codec_ctx->height;
-
-	ctx->v_codec = avcodec_find_decoder(ctx->v_codec_ctx->codec_id);
+	ctx->v_codec = avcodec_find_decoder(ctx->v_stream->codecpar->codec_id);
 	if (ctx->v_codec == NULL) {
 		ol_err("No video codec\n");
 		return -1;
 	}
+	ctx->v_codec_ctx = avcodec_alloc_context3(ctx->v_codec);
+	if (ctx->v_codec_ctx == NULL)
+		return -1;
+	if (avcodec_parameters_to_context(ctx->v_codec_ctx, ctx->v_stream->codecpar) < 0)
+		return -1;
+	ctx->width = ctx->v_codec_ctx->width;
+	ctx->height = ctx->v_codec_ctx->height;
+
 
 	if (avcodec_open2(ctx->v_codec_ctx, ctx->v_codec, NULL) < 0) {
 		ol_err("Failed to open video codec\n");
@@ -1112,9 +1404,11 @@ void *display_thread(void *arg)
 	PlayerCtx *ctx = arg;
 	int i;
 
+	ensure_sample_rates();
+
 	OLRenderParams params;
 	memset(&params, 0, sizeof params);
-	params.rate = 48000;
+	params.rate = g_ol_sample_rate;
 	params.on_speed = 2.0/100.0;
 	params.off_speed = 2.0/15.0;
 	params.start_wait = 8;
@@ -1124,12 +1418,15 @@ void *display_thread(void *arg)
 	params.min_length = 20;
 	params.start_dwell = 2;
 	params.end_dwell = 2;
-	params.max_framelen = 48000/20.0;
+	params.max_framelen = g_ol_sample_rate/20.0;
 
+	ol_info("OpenLase sample rate: %d\n", params.rate);
 	if(olInit(OL_FRAMES_BUF, 300000) < 0) {
 		ol_err("OpenLase init failed\n");
 		return NULL;
 	}
+
+	font = olGetDefaultFont();
 
 	float aspect = ctx->width / (float)ctx->height;
 	float sample_aspect = (float)av_q2d(ctx->v_stream->sample_aspect_ratio);
@@ -1297,6 +1594,34 @@ void *display_thread(void *arg)
 		int i, j;
 		frame = ctx->cur_color_frame;
 
+		if (frame->is_burn) {
+			/* printf("%.2f: Burn! (x=%d y=%d)\n", */
+			/* 	   frame->pts, frame->burn_x, frame->burn_y); */
+			/* fflush(stdout); */
+
+			int color = 0x00FFFFFF; // White
+
+			int samples = 80;
+			olBegin(OL_POINTS);
+			for (i = 0; i < samples * 2; i++)
+				olVertex(frame->burn_x, frame->burn_y, color);
+			olEnd();
+			float ftime = olRenderFrame(samples);
+
+			OLFrameInfo info;
+			olGetFrameInfo(&info);
+			frames++;
+			time += ftime;
+
+			deliver_event(ctx, time, ftime, frames, 0);
+			pthread_mutex_lock(&ctx->display_mode_mutex);
+			display_mode = ctx->display_mode;
+			pthread_mutex_unlock(&ctx->display_mode_mutex);
+			continue;
+		} else {
+			//printf("%.2f: No burn\n", frame->pts);
+		}
+
 		for (i = 0; i < result.count; i++) {
 			OLTraceObject *o = &result.objects[i];
 			olBegin(OL_POINTS);
@@ -1418,7 +1743,6 @@ int player_init(PlayerCtx *ctx)
 
 void playvid_init(void)
 {
-	av_register_all();
 	avdevice_register_all();
 }
 

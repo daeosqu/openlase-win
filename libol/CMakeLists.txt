@@ -24,12 +24,15 @@ set(LIBRARY_NAMESPACE "${PROJECT_NAME}")
 set(LIBRARY_VERSION "0.0.2.1")
 set(LIBRARY_TARGET_NAME LibOL)
 set(LIBRARY_INCLUDE_DIRECTORY_NAME libol)
-set(LIBRARY_OUTPUT_NAME ol)
 set(export_h_prefix "LIBOL")
 
-if(MSVC AND NOT BUILD_SHARED_LIBS)
-  set(LIBRARY_OUTPUT_NAME "${LIBRARY_OUTPUT_NAME}_static")
-endif()
+# if(MSVC AND NOT BUILD_SHARED_LIBS)
+#   set(LIBRARY_OUTPUT_NAME "ol_static")
+# else()
+#   set(LIBRARY_OUTPUT_NAME "ol")
+# endif()
+set(LIBRARY_OUTPUT_NAME "ol")
+
 set(${LIBRARY_TARGET_NAME}_SRC
   ${CMAKE_CURRENT_SOURCE_DIR}/libol.c
   ${CMAKE_CURRENT_SOURCE_DIR}/text.c
@@ -62,7 +65,7 @@ find_package(JACK REQUIRED)
 ##  Library  ##
 ###############
 
-add_library(${LIBRARY_TARGET_NAME})
+add_library(${LIBRARY_TARGET_NAME} SHARED)
 add_library(${LIBRARY_NAMESPACE}::${LIBRARY_TARGET_NAME}
   ALIAS ${LIBRARY_TARGET_NAME})
 
@@ -137,30 +140,31 @@ if(BUILD_TRACER)
     else()
       message(STATUS "YASM Not Found!")
 	  endif()
-  else()
-    if(${CMAKE_SYSTEM_PROCESSOR} MATCHES "armv7")
-      add_compile_options(-mcpu=cortex-a7 -mfpu=neon-vfpv4 -mfloat-abi=hard)
-      set(TRACER_SOURCES trace.c imgproc_neon.S)
-      enable_language(ASM)
-      message(STATUS "Will build tracer (armv7 NEON version)")
     else()
       set(TRACER_SOURCES trace.c imgproc_sse2.asm)
-      enable_language(ASM_YASM)
+      enable_language(ASM_NASM)
+
+      if(CMAKE_SIZEOF_VOID_P EQUAL 8)
+        set_source_files_properties(imgproc_sse2.asm PROPERTIES
+          COMPILE_OPTIONS "-DARCH_X86_64=1;-DHAVE_ALIGNED_STACK=0;-Dprivate_prefix=ol")
+      else()
+        set_source_files_properties(imgproc_sse2.asm PROPERTIES
+          COMPILE_OPTIONS "-DARCH_X86_64=0;-DHAVE_ALIGNED_STACK=0;-DPREFIX;-Dprivate_prefix=ol")
+      endif()
+
       message(STATUS "Will build tracer (SSE2 version)")
     endif()
-  endif()
 else()
   message(STATUS "Will NOT build tracer")
 endif()
 
 # Compiler options
-target_compile_features(${LIBRARY_TARGET_NAME} PRIVATE cxx_std_11)
+target_compile_features(${LIBRARY_TARGET_NAME} PRIVATE c_std_11)
 target_compile_definitions(${LIBRARY_TARGET_NAME} PUBLIC "$<$<NOT:$<BOOL:${BUILD_SHARED_LIBS}>>:${export_h_prefix}_STATIC_DEFINE>")
 
 target_include_directories(${LIBRARY_TARGET_NAME}
   PRIVATE
   "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>"
-  "$<BUILD_INTERFACE:${JACK_INCLUDE_DIR}>"
   PUBLIC
   "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
   "$<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>"
@@ -178,10 +182,6 @@ set_target_properties(${LIBRARY_TARGET_NAME} PROPERTIES
 set_target_properties(${LIBRARY_TARGET_NAME} PROPERTIES
   POSITION_INDEPENDENT_CODE ON)
 
-target_include_directories(${LIBRARY_TARGET_NAME}
-  PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
-  "$<INSTALL_INTERFACE:$<INSTALL_PREFIX>/${CMAKE_INSTALL_INCLUDEDIR}>")
-
 target_sources(${LIBRARY_TARGET_NAME}
   PRIVATE "${${LIBRARY_TARGET_NAME}_SRC}"
   PRIVATE "${TRACER_SOURCES}")
@@ -192,7 +192,8 @@ set_target_properties(${LIBRARY_TARGET_NAME} PROPERTIES
 
 # libol_export.h
 
-generate_export_header(${LIBRARY_TARGET_NAME} EXPORT_FILE_NAME ./include/libol/libol_export.h)
+generate_export_header(${LIBRARY_TARGET_NAME}
+  EXPORT_FILE_NAME "${CMAKE_CURRENT_BINARY_DIR}/include/libol/libol_export.h")
 
 # libol_config.h
 
@@ -200,7 +201,11 @@ check_include_file(malloc.h HAVE_MALLOC_H)
 check_symbol_exists(memalign malloc.h HAVE_MEMALIGN)
 check_symbol_exists(posix_memalign stdlib.h HAVE_POSIX_MEMALIGN)
 check_symbol_exists(_aligned_malloc malloc.h HAVE_ALIGNED_MALLOC)
-configure_file(./include/libol/libol_config.h.in ./include/libol/libol_config.h @ONLY)
+
+configure_file(
+  "${CMAKE_CURRENT_SOURCE_DIR}/include/libol/libol_config.h.in"
+  "${CMAKE_CURRENT_BINARY_DIR}/include/libol/libol_config.h"
+  @ONLY)
 
 # fontdef.c
 

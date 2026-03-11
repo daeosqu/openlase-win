@@ -22,8 +22,8 @@ if(Qt5Widgets_FOUND)
   QT5_WRAP_CPP(output_MOCS output_settings.h)
 
   add_executable(output output.cpp output_settings.cpp ${output_UIS_H} ${output_MOCS})
-  target_include_directories(output PRIVATE ${CMAKE_SOURCE_DIR}/libol/include ${CMAKE_SOURCE_DIR}/common ${CMAKE_CURRENT_BINARY_DIR} ${JACK_INCLUDE_DIR})
-  target_link_libraries(output ${JACK_LIBRARIES} Qt5::Widgets)
+  target_include_directories(output PRIVATE ${CMAKE_SOURCE_DIR}/libol/include ${CMAKE_SOURCE_DIR}/common ${CMAKE_CURRENT_BINARY_DIR} ${JACK_INCLUDE_DIR} ${GETOPT_INCLUDE_DIR})
+  target_link_libraries(output ${JACK_LIBRARIES} Qt5::Widgets ${GETOPT_LIBRARY})
 
   install(TARGETS output RUNTIME DESTINATION bin COMPONENT Applications)
 

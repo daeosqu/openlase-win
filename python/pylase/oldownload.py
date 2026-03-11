@@ -9,6 +9,7 @@ from pathlib import Path
 import tempfile
 import shutil
 import shlex
+import json
 
 import click
 import jaconv
@@ -24,16 +25,18 @@ class MediaManager:
     Row = Query()
 
     ydl_opts = {
-        # oldownload https://www.nicovideo.jp/watch/sm35241141 でエラーになる
         # yt_dlp.utils.DownloadError: ERROR: [niconico] sm35241141: Requested format is not available. Use --list-formats for a list of available formats
-        'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
+        # bestaudio[ext=m4a] だと www.niconico.jp/watch/sm35241141 等で
+        # エラーになる。
         #'format': 'best',
+        #'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
+        'format': 'bestvideo[ext=mp4]+bestaudio/best[ext=mp4]/best',
     }
 
     def __init__(self):
         data_dir = os.getenv('OL_DATA_DIR', None)
-        if data_dir is None or data_dir.strip() == '':
-            self.data_dir = str(Path.home() / '.cache/openlase')
+        if not data_dir or str(data_dir).strip() == '':
+            data_dir = Path.home() / '.cache/openlase'
         self.data_dir = Path(data_dir)
         self.db_path = self.data_dir / 'db.json'
         self.cache_dir = self.data_dir / 'cache'
@@ -316,7 +319,12 @@ class MediaFile:
                     output_options['b:a'] = str(self.MAX_AUDIO_BIT_RATE)
 
                 try:
-                    with tempfile.NamedTemporaryFile(suffix=ofilepath.suffix, delete=False) as tmp:
+                    #with tempfile.NamedTemporaryFile(suffix=ofilepath.suffix, delete=False) as tmp:
+                    with tempfile.NamedTemporaryFile(
+                        suffix=ofilepath.suffix,
+                        dir=str(ofilepath.parent),
+                        delete=False
+                    ) as tmp:
                         tmpname = tmp.name
                     cmd = (
                         media
@@ -339,6 +347,31 @@ class MediaFile:
                 finally:
                     if tmpname is not None:
                         Path(tmpname).unlink()
+
+
+def mediafile_to_dict(media_file: MediaFile) -> dict:
+    return {
+        'id': media_file.row.get('id'),
+        'idstr': media_file.idstr,
+        'title': media_file.title,
+        'url': media_file.url,
+        'media_path': str(media_file.media_path),
+        'cache_path': str(media_file.cache_path),
+    }
+
+
+def emit_media_entry(media_file: MediaFile, *, verbose: bool, json_output: bool, stream=original_stdout) -> None:
+    if json_output:
+        json.dump(mediafile_to_dict(media_file), stream, ensure_ascii=False, indent=2)
+        stream.write('\n')
+        return
+
+    if verbose:
+        print(f'# id: {media_file.idstr}', file=stream)
+        print(f'# title: {media_file.title}', file=stream)
+        print(f'# url: {media_file.url}', file=stream)
+
+    print(str(media_file.media_path), file=stream)
 
 
 @click.command(
@@ -405,14 +438,36 @@ class MediaFile:
     help="Force convert all",
 )
 @click.option(
+    "-v",
+    "--verbose",
+    is_flag=True,
+    help="Show detailed metadata before the filename",
+)
+@click.option(
+    "--json",
+    "json_output",
+    is_flag=True,
+    help="Output entries as JSON",
+)
+@click.option(
     "--id",
     "by_id",
     is_flag=True,
     help="Print filenames with id",
 )
 @click.argument("args", nargs=-1)
-def main(list_files, list_titles, migrate, playvid, playvid2, qplayvid, command, force_convert, force_convert_all, by_id, args):
+@click.pass_context
+def cli_main(ctx, list_files, list_titles, migrate, playvid, playvid2, qplayvid, command, force_convert, force_convert_all, verbose, json_output, by_id, args):
+    ctx.ensure_object(dict)
+
+    args = list(args)
+
+    passthrough_args: list[str] = ctx.obj.get("post", [])
+
     mm = MediaManager()
+
+    if verbose and json_output:
+        raise click.UsageError("--json cannot be combined with -v/--verbose output mode")
 
     if migrate:
         mm.normalize_database()
@@ -423,13 +478,12 @@ def main(list_files, list_titles, migrate, playvid, playvid2, qplayvid, command,
         else:
             # TODO
             arr = []
-        if list_titles and list_files:
-            title_prefix = '# '
+        title_prefix = '# ' if list_titles and list_files else ''
         for mf in arr:
             if list_titles:
                 print(title_prefix + str(mf.title), file=original_stdout)
             if list_files:
-                print(str(mf.media_path), file=original_stdout)
+                emit_media_entry(mf, verbose=verbose, json_output=json_output)
     elif force_convert_all:
         for mf in mm.all():
             mf.delete()
@@ -454,9 +508,29 @@ def main(list_files, list_titles, migrate, playvid, playvid2, qplayvid, command,
                 if force_convert:
                     mf.delete()
                 mf.ensure_video()
-                print(str(mf.media_path), file=original_stdout)
+                emit_media_entry(mf, verbose=verbose, json_output=json_output)
                 if command:
-                    subprocess.run([command, str(mf.media_path)], shell=False)
+                    cmd = [command]
+                    if passthrough_args:
+                        cmd.extend(passthrough_args)
+                    cmd.append(str(mf.media_path))
+                    print(cmd)
+                    subprocess.run(cmd, shell=False)
 
-if __name__ == '__main__':
+
+def _split_os_argv(argv: list[str]) -> tuple[list[str], list[str]]:
+    if "--" in argv:
+        i = argv.index("--")
+        return argv[:i], argv[i + 1:]
+    return argv, []
+
+
+def main() -> None:
+    os_argv = sys.argv[1:]
+    pre, post = _split_os_argv(os_argv)
+    # oldownload OPTION ARGS -- ARGS_FOR_COMMAND
+    cli_main.main(args=pre, obj={"post": post}, standalone_mode=True)
+
+
+if __name__ == "__main__":
     main()

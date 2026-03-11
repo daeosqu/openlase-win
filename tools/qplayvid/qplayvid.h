@@ -24,6 +24,8 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 extern "C" {
 #endif
 
+#include <stdint.h>
+
 #define IM_BIBUF 0
 #define IM_BTBUF 1
 #define IM_SIBUF 2

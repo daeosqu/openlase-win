@@ -16,11 +16,12 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 
+import os
 import math
 import colorsys
 
-if os.name == 'nt':
-    os.add_dll_directory(r"C:\Windows")  # for find jack.dll
+# if os.name == 'nt':
+#     os.add_dll_directory(r"C:\Windows")  # for find jack.dll
 
 import pylase as ol
 
